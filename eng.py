@@ -14,8 +14,11 @@ if __name__ == "__main__":
     for i in range(len(temps)): 
         os.chdir("{}/inherent_structures".format(temps[i]))
         trajfiles = glob.glob("rank_*/all_frames.xtc")
-        calc_Enat_for_directories(trajfiles, path_to_params=path_to_params)
-        calc_Enn_for_directories(trajfiles, path_to_params=path_to_params)
+        if trajfiles == []:
+            print "no output trajs found!"
+        else:
+            calc_Enat_for_directories(trajfiles, path_to_params=path_to_params)
+            calc_Enn_for_directories(trajfiles, path_to_params=path_to_params)
         os.chdir("../..")
 
     print "{} min".format((time.time() - starttime)/60.)
