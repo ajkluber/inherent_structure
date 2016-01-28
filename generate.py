@@ -141,11 +141,6 @@ if __name__ == "__main__":
                         type=str,
                         help="Name of file that holds frame.")
 
-    parser.add_argument("--n_frames",
-                        type=int,
-                        default=int(6E5 + 1),
-                        help="Number of frames in trajectory.")
-
     parser.add_argument("--n_proc",
                         type=int,
                         default=1,
@@ -157,7 +152,6 @@ if __name__ == "__main__":
     model_dir = args.path_to_ini
     stride = args.stride
     frames_file = args.frames_file
-    n_frames = args.n_frames
     n_proc = args.n_proc
 
     topology = "../Native.pdb"
@@ -181,7 +175,6 @@ if __name__ == "__main__":
                 os.mkdir("inherent_structures")
             prep_minimization(model_dir, name, stride)
         comm.Barrier()
-
         os.chdir("inherent_structures")
 
         traj_whole = mdtraj.load(trajfile, top=topology)
@@ -194,53 +187,8 @@ if __name__ == "__main__":
             chunksize += 1
         frames_for_proc = [ all_frame_idxs[i*chunksize:(i + 1)*chunksize:stride] for i in range(size) ]
         frame_idxs = frames_for_proc[rank]
-        n_frames_for_proc = [ len(x) for x in frames_for_proc ]
-
         traj = traj_whole.slice(frames_for_proc[rank])
 
-#        if rank == 0:
-#            print chunksize
-#            print frames_for_proc 
-#            print size, rank
-
-#        if rank == 0:
-#            rank_i = 0
-#            tot_frames = 0
-#            for chunk in mdtraj.iterload(trajfile, top=topology, chunk=chunksize):
-#                sub_chunk = chunk.slice(np.arange(0, chunk.n_frames, stride))
-#                tot_frames += chunk.n_frames
-#                #print rank_i, tot_frames
-#                if (rank_i == 0) and (rank == 0):
-#                    traj = sub_chunk
-#                else:
-#                    print rank_i
-#                    comm.send(sub_chunk, dest=rank_i)
-#                rank_i += 1
-#        rank_i = 0
-#        tot_frames = 0
-#        for chunk in mdtraj.iterload(trajfile, top=topology, chunk=chunksize):
-#            sub_chunk = chunk.slice(np.arange(0, chunk.n_frames, stride))
-#            tot_frames += chunk.n_frames
-#            if rank_i == rank:
-#                print rank_i, rank
-#                traj = sub_chunk
-#            rank_i += 1
-#        print tot_frames
-        #if rank == 0:
-
-#        if (rank_i > 0) and (rank_i == rank):
-#            print "Received: ", rank_i
-#            traj = comm.recv(source=0)
-
-        if 'traj' not in locals():
-            print "{} didn't get it".format(rank)
-            
-        #if rank > 0:
-        #    print rank
-        #    traj = comm.recv()
-        #print rank, traj.n_frames, traj.time[:2]/0.5, frame_idxs[:2], traj.time[-2:]/0.5, frame_idxs[-2:]  ## DEBUGGING
-
-        #print rank
         if not os.path.exists("rank_{}".format(rank)):
             os.mkdir("rank_{}".format(rank))
         os.chdir("rank_{}".format(rank))
