@@ -59,6 +59,7 @@ def prep_minimization(model_dir, name, stride):
     # Load model
     cwd = os.getcwd()
     os.chdir(model_dir)
+    print model_dir
     model, fitopts = mdb.inputs.load_model(name)
     os.chdir(cwd)
 
@@ -79,32 +80,34 @@ def prep_minimization(model_dir, name, stride):
 def run_minimization(frame_idxs, traj, filedir="."):
     """Perform energy minimization on each frame"""
     n_frames_out = len(frame_idxs)
-#    run = True
-#    if os.path.exists("Etot.dat"):
-#        if len(np.loadtxt("Etot.dat")) == n_frames_out:
-#            # Minimization has finished
-#            run = False
-#
-#    if run: 
 
-# Skip frames that have already finished.
+    # Skip frames that have already finished.
+    if os.path.exists("frames_fin.dat"):
+        frames_fin = np.loadtxt("frames_fin.dat", dtype=int)
+        start = len(frames_fin)
+        Etot = np.loadtxt("Etot.dat")
+        if start < len(Etot):
+            np.savetxt("Etot.dat", Etot[:start])
+    else:
+        start = 0
+    
+    if start != n_frames_out:
+        # Minimization needs to be done
+        np.savetxt("frame_idxs.dat", frame_idxs, fmt="%d")
 
-    # Minimization needs to be done
-    np.savetxt("frame_idxs.dat", frame_idxs, fmt="%d")
-
-    script = minimization_script(filedir=filedir)
-    with open("minimize.bash", "w") as fout:
-        fout.write(script)
-    cmd = "bash minimize.bash"
-    # Loop over trajectory frames
-    for i in xrange(traj.n_frames):
-        # perform energy minimization using gromacs
-        frm = traj.slice(i)
-        frm.save_gro("conf.gro")
-        sb.call(cmd.split())
-        # record frame idx
-        with open("frames_fin.dat", "a") as fout:
-            fout.write("{:d}\n".format(frame_idxs[i]))
+        script = minimization_script(filedir=filedir)
+        with open("minimize.bash", "w") as fout:
+            fout.write(script)
+        cmd = "bash minimize.bash"
+        # Loop over trajectory frames
+        for i in xrange(start, traj.n_frames):
+            # perform energy minimization using gromacs
+            frm = traj.slice(i)
+            frm.save_gro("conf.gro")
+            sb.call(cmd.split())
+            # record frame idx
+            with open("frames_fin.dat", "a") as fout:
+                fout.write("{:d}\n".format(frame_idxs[i]))
 
 def restart(trajfile, topology):
     """TODO: write restart function"""
@@ -159,6 +162,7 @@ if __name__ == "__main__":
 
     topology = "../Native.pdb"
     trajfile = "../traj.xtc"
+    
 
     # Performance on one processor is roughly 11sec/frame. 
     # So 1proc can do about 2500 frames over 8hours.
@@ -180,44 +184,68 @@ if __name__ == "__main__":
 
         os.chdir("inherent_structures")
 
+        traj_whole = mdtraj.load(trajfile, top=topology)
+        n_frames = traj_whole.n_frames
+
         # Distribute trajectory chunks to each processor
         all_frame_idxs = np.arange(0, n_frames)
         chunksize = len(all_frame_idxs)/size
         if (len(all_frame_idxs) % size) != 0:
             chunksize += 1
         frames_for_proc = [ all_frame_idxs[i*chunksize:(i + 1)*chunksize:stride] for i in range(size) ]
+        frame_idxs = frames_for_proc[rank]
         n_frames_for_proc = [ len(x) for x in frames_for_proc ]
 
-        #print chunksize
-        #print frames_for_proc 
-        #print size, rank
+        traj = traj_whole.slice(frames_for_proc[rank])
 
-        if rank == 0:
-            rank_i = 0
-            tot_frames = 0
-            for chunk in mdtraj.iterload(trajfile, top=topology, chunk=chunksize):
-                sub_chunk = chunk.slice(np.arange(0, chunk.n_frames, stride))
-                tot_frames += chunk.n_frames
-                #print rank_i, tot_frames
-                if (rank_i == 0) and (rank == 0):
-                    traj = sub_chunk
-                else:
-                    comm.send(sub_chunk, dest=rank_i, tag=11)
-                rank_i += 1
+#        if rank == 0:
+#            print chunksize
+#            print frames_for_proc 
+#            print size, rank
+
+#        if rank == 0:
+#            rank_i = 0
+#            tot_frames = 0
+#            for chunk in mdtraj.iterload(trajfile, top=topology, chunk=chunksize):
+#                sub_chunk = chunk.slice(np.arange(0, chunk.n_frames, stride))
+#                tot_frames += chunk.n_frames
+#                #print rank_i, tot_frames
+#                if (rank_i == 0) and (rank == 0):
+#                    traj = sub_chunk
+#                else:
+#                    print rank_i
+#                    comm.send(sub_chunk, dest=rank_i)
+#                rank_i += 1
+#        rank_i = 0
+#        tot_frames = 0
+#        for chunk in mdtraj.iterload(trajfile, top=topology, chunk=chunksize):
+#            sub_chunk = chunk.slice(np.arange(0, chunk.n_frames, stride))
+#            tot_frames += chunk.n_frames
+#            if rank_i == rank:
+#                print rank_i, rank
+#                traj = sub_chunk
+#            rank_i += 1
+#        print tot_frames
+        #if rank == 0:
+
+#        if (rank_i > 0) and (rank_i == rank):
+#            print "Received: ", rank_i
+#            traj = comm.recv(source=0)
+
+        if 'traj' not in locals():
+            print "{} didn't get it".format(rank)
             
-        frame_idxs = frames_for_proc[rank]
-        if rank > 0:
-            traj = comm.recv(source=0, tag=11)
+        #if rank > 0:
+        #    print rank
+        #    traj = comm.recv()
         #print rank, traj.n_frames, traj.time[:2]/0.5, frame_idxs[:2], traj.time[-2:]/0.5, frame_idxs[-2:]  ## DEBUGGING
 
+        #print rank
         if not os.path.exists("rank_{}".format(rank)):
             os.mkdir("rank_{}".format(rank))
         os.chdir("rank_{}".format(rank))
         run_minimization(frame_idxs, traj, filedir="..")
         os.chdir("..")
-        # If all trajectories finished then bring them together. Collate
-        #comm.Barrier()
-     
     else:
         if not os.path.exists("inherent_structures"):
             os.mkdir("inherent_structures")
