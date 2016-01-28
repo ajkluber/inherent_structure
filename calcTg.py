@@ -44,32 +44,19 @@ def get_energies(temps):
     return Etot, Enat, Enn, Etot_U, Enat_U, Enn_U, frames_fin
 
 if __name__ == "__main__":
-#    parser = argparse.ArgumentParser(description="inherent structure analysis to get Tg")
-#    parser.add_argument("--size",
-#                        type=int,
-#                        required=True,
-#                        help="Number of subdirs.")
-#
-#    parser.add_argument("--temperature",
-#                        type=float,
-#                        required=True,
-#                        help="Temperature.")
-#
-#    parser.add_argument("--n_bins",
-#                        type=int,
-#                        default=100,
-#                        help="Number of bins.")
-#
-#    parser.add_argument("--plot",
-#                        action="store_true",
-#                        help="Plot figure.")
-#
-#    args = parser.parse_args()
-#    size = args.size
-#    T = args.temperature
-#    nbins = args.n_bins
-#    plot = args.plot
-    plot = True
+    parser = argparse.ArgumentParser(description="inherent structure analysis to get Tg")
+    parser.add_argument("--nodisplay",
+                        action='store_true',
+                        help="Don't display plot.")
+
+    parser.add_argument("--n_bins",
+                        type=int,
+                        default=100,
+                        help="Number of bins.")
+
+    args = parser.parse_args()
+    nodisplay = args.nodisplay
+    nbins = args.n_bins
 
     temps = [ x.rstrip("\n") for x in open("ticatemps", "r").readlines() ]
     T = float(temps[0].split("_")[0])
@@ -127,32 +114,31 @@ if __name__ == "__main__":
     np.savetxt("E_mid_bin.dat", mid_bin)
     np.savetxt("Sconf_tot.dat", SconfE)
     np.savetxt("Sconf_Enn.dat", SconfE_U)
-    #np.savetxt("")
 
-    if plot:
-        # solve for other REM parameters using fit.
-        Efit = np.linspace(0, max(mid_bin), 1000)
-        Tk_line = lambda E: dSdE(E_GS)*E - dSdE(E_GS)*E_GS
-        E_Tk_line = np.linspace(0.95*E_GS, 1.01*E_GS, 1000)
+    # solve for other REM parameters using fit.
+    Efit = np.linspace(0, max(mid_bin), 1000)
+    Tk_line = lambda E: dSdE(E_GS)*E - dSdE(E_GS)*E_GS
+    E_Tk_line = np.linspace(0.95*E_GS, 1.01*E_GS, 1000)
 
-        # Plot
-        plt.figure()
-        plt.plot(mid_bin, beta*mid_bin, label="$E$")
-        plt.plot(mid_bin, SconfE, label="$S_{conf}$")
-        plt.plot(mid_bin_U, SconfE_U, label="$S_{conf}(Q_u)$")
-        plt.plot(Efit, SconfE_U_interp(Efit), ls='--', lw=1, label="REM fit")
-        
-        #plt.plot(E_Tk_line, Tk_line(E_Tk_line), 'k')
-        #plt.annotate('$\\frac{1}{T_k} = \\frac{\\partial S }{\\partial E}$', xy=(E_GS, 0),  xycoords='data',
-        #        xytext=(0.4, 0.2), textcoords='axes fraction', fontsize=22,
-        #        arrowprops=dict(facecolor='black', shrink=0.1))
-        plt.ylabel("Entropy $S_{conf}$ ($k_B$)")
-        plt.xlabel("Energy ($k_B T$)")
-        plt.title("$T_f = {:.2f}$  $T_k = {:.2f}$".format(T,Tg))
-        plt.legend(loc=2)
-        plt.ylim(0, np.max(SconfE))
-        plt.savefig("REM_fit_of_dos.png", bbox_inches="tight") 
-        plt.savefig("REM_fit_of_dos.pdf", bbox_inches="tight") 
+    # Plot
+    plt.figure()
+    plt.plot(mid_bin, beta*mid_bin, label="$E$")
+    plt.plot(mid_bin, SconfE, label="$S_{conf}$")
+    plt.plot(mid_bin_U, SconfE_U, label="$S_{conf}(Q_u)$")
+    plt.plot(Efit, SconfE_U_interp(Efit), ls='--', lw=1, label="REM fit")
+    
+    #plt.plot(E_Tk_line, Tk_line(E_Tk_line), 'k')
+    #plt.annotate('$\\frac{1}{T_k} = \\frac{\\partial S }{\\partial E}$', xy=(E_GS, 0),  xycoords='data',
+    #        xytext=(0.4, 0.2), textcoords='axes fraction', fontsize=22,
+    #        arrowprops=dict(facecolor='black', shrink=0.1))
+    plt.ylabel("Entropy $S_{conf}$ ($k_B$)")
+    plt.xlabel("Energy ($k_B T$)")
+    plt.title("$T_f = {:.2f}$  $T_k = {:.2f}$".format(T,Tg))
+    plt.legend(loc=2)
+    plt.ylim(0, np.max(SconfE))
+    plt.savefig("REM_fit_of_dos.png", bbox_inches="tight") 
+    plt.savefig("REM_fit_of_dos.pdf", bbox_inches="tight") 
+    if nodisplay is not None:
         plt.show()
 
     os.chdir("..")
