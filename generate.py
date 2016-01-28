@@ -175,10 +175,10 @@ if __name__ == "__main__":
         if rank == 0:
             if not os.path.exists("inherent_structures"):
                 os.mkdir("inherent_structures")
+            prep_minimization(model_dir, name, stride)
         comm.Barrier()
 
         os.chdir("inherent_structures")
-        prep_minimization(model_dir, name, stride)
 
         # Distribute trajectory chunks to each processor
         all_frame_idxs = np.arange(0, n_frames)
@@ -204,7 +204,6 @@ if __name__ == "__main__":
                 else:
                     comm.send(sub_chunk, dest=rank_i, tag=11)
                 rank_i += 1
-                
             
         frame_idxs = frames_for_proc[rank]
         if rank > 0:
@@ -217,7 +216,7 @@ if __name__ == "__main__":
         run_minimization(frame_idxs, traj, filedir="..")
         os.chdir("..")
         # If all trajectories finished then bring them together. Collate
-        comm.Barrier()
+        #comm.Barrier()
      
     else:
         if not os.path.exists("inherent_structures"):

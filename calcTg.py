@@ -1,91 +1,91 @@
+import os
+import glob
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-import os
-import argparse
 
 global kb
 kb = 0.0083145
 
-def get_energy_IS(filename, size, U_bounds, Q, frame_idxs):
-    # Load inherent structure energies
-    allE = []
-    allE_U = []
-    for i in range(size):
-        if os.path.exists("rank_{}/{}".format(rank, filename)):
-            tempE = np.loadtxt("rank_{}/{}".format(rank, filename))
-            n_frms = np.min([len(tempE), len(frame_idxs[i])])
-            fin_frames = frame_idxs[i][:n_frms]
-            U = (Q[fin_frames] > U_bounds[0]) & (Q[fin_frames] < U_bounds[1])
-            allE.append(tempE)
-            allE_U.append(tempE[U])
-        else:
-            pass
-    if allE == []:
-        raise IOError("Some files do not exist.") 
-    
-    #allE = [ np.loadtxt("rank_{}/{}".format(rank, filename)) for rank in range(size) ]
-    #n_finish = [ np.min([len(allE[i]), len(frame_idxs[i])]) for i in range(size) ]
-    #frames_fin = [ frame_idxs[i][:n_finish[i]] for i in range(size) ]
-    #U = [ ((Q[x] > U_bounds[0]) & (Q[x] < U_bounds[1])) for x in frames_fin ]
-    E = np.concatenate(allE)
-    E_U = np.concatenate(allE_U)
-    return E, E_U
+def get_energies(temps):
+    Etot = [] 
+    Enn = [] 
+    Enat = [] 
+    Etot_U = [] 
+    Enn_U = [] 
+    Enat_U = [] 
+    frames_fin = []
+    U_frames = []
+    for i in range(len(temps)): 
+        print "{}".format(temps[i])
+        Q = np.loadtxt("{}/Qtanh_0_05.dat".format(temps[i]))
+
+        os.chdir("{}/inherent_structures".format(temps[i]))
+        frm_files = glob.glob("rank_*/frames_fin.dat")
+        dirs = [ x.split("/")[0] for x in frm_files ]
+        
+        frames_fin_temp = [ np.loadtxt(x, dtype=int) for x in frm_files ]
+        U = [ (Q[x] > bounds[0]) & (Q[x] < bounds[1]) for x in frames_fin_temp ]
+        frames_fin.append(np.concatenate(frames_fin_temp))
+
+        Etot_temp = [ np.loadtxt("{}/Etot.dat".format(x)) for x in dirs ] 
+        Enat_temp = [ np.loadtxt("{}/Enative.dat".format(x)) for x in dirs ] 
+        Enn_temp = [ np.loadtxt("{}/Enonnative.dat".format(x)) for x in dirs ] 
+
+        Etot_U.append(np.concatenate([ Etot_temp[x][U[x]] for x in range(len(U)) ]))
+        Enat_U.append(np.concatenate([ Enat_temp[x][U[x]] for x in range(len(U))]))
+        Enn_U.append(np.concatenate([ Enn_temp[x][U[x]] for x in range(len(U))]))
+
+        Etot.append(np.concatenate(Etot_temp))
+        Enat.append(np.concatenate(Enat_temp))
+        Enn.append(np.concatenate(Enn_temp))
+
+        os.chdir("../..")
+    return Etot, Enat, Enn, Etot_U, Enat_U, Enn_U, frames_fin
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="inherent structure analysis to get Tg")
-    parser.add_argument("--size",
-                        type=int,
-                        required=True,
-                        help="Number of subdirs.")
+#    parser = argparse.ArgumentParser(description="inherent structure analysis to get Tg")
+#    parser.add_argument("--size",
+#                        type=int,
+#                        required=True,
+#                        help="Number of subdirs.")
+#
+#    parser.add_argument("--temperature",
+#                        type=float,
+#                        required=True,
+#                        help="Temperature.")
+#
+#    parser.add_argument("--n_bins",
+#                        type=int,
+#                        default=100,
+#                        help="Number of bins.")
+#
+#    parser.add_argument("--plot",
+#                        action="store_true",
+#                        help="Plot figure.")
+#
+#    args = parser.parse_args()
+#    size = args.size
+#    T = args.temperature
+#    nbins = args.n_bins
+#    plot = args.plot
+    plot = True
 
-    parser.add_argument("--temperature",
-                        type=float,
-                        required=True,
-                        help="Temperature.")
-
-    parser.add_argument("--n_bins",
-                        type=int,
-                        default=100,
-                        help="Number of bins.")
-
-    parser.add_argument("--plot",
-                        action="store_true",
-                        help="Plot figure.")
-
-    args = parser.parse_args()
-    size = args.size
-    T = args.temperature
-    nbins = args.n_bins
-    plot = args.plot
-
+    temps = [ x.rstrip("\n") for x in open("ticatemps", "r").readlines() ]
+    T = float(temps[0].split("_")[0])
+    nbins = 100
     #nbins_U = 30
     nbins_U = 100
-
     beta = 1./(T*kb)
-
-    Q_U = np.loadtxt("../../Qtanh_0_05_profile/minima.dat")[0]
+    
+    Q_U = np.loadtxt("Qtanh_0_05_profile/minima.dat")[0]
     bounds = (0, Q_U + 5)
+    #bounds = (Q_U - 5, Q_U + 5)
 
-    frame_idxs = [ np.loadtxt("rank_{}/frame_idxs.dat".format(rank), dtype=int) for rank in range(size) ]
-    Q = np.loadtxt("../Qtanh_0_05.dat")
+    Etot, Enat, Enn, Etot_U, Enat_U, Enn_U, frames_fin = get_energies(temps)
 
-    all_frame_idxs = np.concatenate(frame_idxs)
-
-    # Thermalized potential energy terms
-    #Etot_therm = np.loadtxt("../energyterms.xvg", usecols=(5,))[all_frame_idxs]
-    #Eback_therm = np.sum(np.loadtxt("../energyterms.xvg", usecols=(1,2,3)), axis=1)[all_frame_idxs]
-    #Enat_therm = np.loadtxt("../Enative.dat")[all_frame_idxs]
-    #Enn_therm = np.loadtxt("../Enonnative.dat")[all_frame_idxs]
-
-    # Post-minimization potential energy terms
-    Etot, Etot_U = get_energy_IS("Etot.dat", size, bounds, Q, frame_idxs) 
-    Enn, Enn_U = get_energy_IS("Enonnative.dat", size, bounds, Q, frame_idxs) 
-    #Enat, Enat_U = get_energy_IS("Enative.dat", size, bounds, Q, frame_idxs) 
-    #Eback = Etot - Enn - Enat
-
-    # Density of state analysis
-    #nE, bins = np.histogram(Etot, bins=nbins)
-    nE, bins = np.histogram(Etot - Enn, bins=nbins)
+    # histogram energies
+    nE, bins = np.histogram(np.concatenate(Etot) - np.concatenate(Enn), bins=nbins)
     dE = bins[1] - bins[0]
     probE = nE.astype(float)*dE
     probE[probE == 0] = np.min(probE[probE != 0])
@@ -93,11 +93,7 @@ if __name__ == "__main__":
     minE = np.min(mid_bin)
     mid_bin -= minE
 
-    # Compute Tg using Etot
-    #nE_U, bins_U = np.histogram(Etot_U, bins=nbins_U, density=True)
-    # OR Compute Tg using Enonnative
-    #nE_U, bins_U = np.histogram(Enn_U, bins=nbins_U, density=True)
-    nE_U, bins_U = np.histogram(Enn, bins=nbins_U, density=True)
+    nE_U, bins_U = np.histogram(np.concatenate(Enn), bins=nbins_U, density=True)
     prob_U = np.float(len(Etot_U))/np.float(len(Etot))
     dE_U = bins_U[1] - bins_U[0]
     probE_U = nE_U.astype(float)*dE_U
@@ -105,11 +101,9 @@ if __name__ == "__main__":
     mid_bin_U = 0.5*(bins_U[1:] + bins_U[:-1])
     mid_bin_U -= minE
 
-    # Equation (7) of Nakagawa, Peyrard 2006
+    # Equation (7) of Nakagawa, Peyrard 2006. Configurational entropy.
     omegaE = (probE/probE[0])*np.exp(beta*mid_bin)
     SconfE = np.log(omegaE)
-
-    #P_E_T = lambda T: np.exp(-(mid_bin - T*0.0083145*SconfE)/(0.0083145*T))
 
     omegaE_U = ((prob_U*probE_U)/(probE[0]))*np.exp(beta*mid_bin_U)
     SconfE_U = np.log(omegaE_U)
@@ -122,11 +116,18 @@ if __name__ == "__main__":
     dSdE = np.poly1d(np.array([2.*a, b]))
     Tg = 1./(kb*dSdE(E_GS))
     print Tg
+    if not os.path.exists("Tg_calc"):
+        os.mkdir("Tg_calc")
+    os.chdir("Tg_calc")
+
     # Tg is ~74K using Etot or ~2.5K using Enonnative
     with open("Tg_Enonnative.dat", "w") as fout:
         fout.write("%.2f" % Tg)
-    #with open("Tg_Enonnative.dat", "w") as fout:
-    #    fout.write("%.2f" % Tg)
+
+    np.savetxt("E_mid_bin.dat", mid_bin)
+    np.savetxt("Sconf_tot.dat", SconfE)
+    np.savetxt("Sconf_Enn.dat", SconfE_U)
+    #np.savetxt("")
 
     if plot:
         # solve for other REM parameters using fit.
@@ -136,16 +137,17 @@ if __name__ == "__main__":
 
         # Plot
         plt.figure()
-        plt.plot(mid_bin, SconfE, label="$S_{conf}$")
         plt.plot(mid_bin, beta*mid_bin, label="$E$")
+        plt.plot(mid_bin, SconfE, label="$S_{conf}$")
         plt.plot(mid_bin_U, SconfE_U, label="$S_{conf}(Q_u)$")
         plt.plot(Efit, SconfE_U_interp(Efit), ls='--', lw=1, label="REM fit")
+        
         #plt.plot(E_Tk_line, Tk_line(E_Tk_line), 'k')
-        plt.annotate('$\\frac{1}{T_k} = \\frac{\\partial S }{\\partial E}$', xy=(E_GS, 0),  xycoords='data',
-                xytext=(0.4, 0.2), textcoords='axes fraction', fontsize=22,
-                arrowprops=dict(facecolor='black', shrink=0.1))
-        plt.ylabel("Entropy $S_{conv}$")
-        plt.xlabel("Energy")
+        #plt.annotate('$\\frac{1}{T_k} = \\frac{\\partial S }{\\partial E}$', xy=(E_GS, 0),  xycoords='data',
+        #        xytext=(0.4, 0.2), textcoords='axes fraction', fontsize=22,
+        #        arrowprops=dict(facecolor='black', shrink=0.1))
+        plt.ylabel("Entropy $S_{conf}$ ($k_B$)")
+        plt.xlabel("Energy ($k_B T$)")
         plt.title("$T_f = {:.2f}$  $T_k = {:.2f}$".format(T,Tg))
         plt.legend(loc=2)
         plt.ylim(0, np.max(SconfE))
@@ -153,5 +155,4 @@ if __name__ == "__main__":
         plt.savefig("REM_fit_of_dos.pdf", bbox_inches="tight") 
         plt.show()
 
-
-
+    os.chdir("..")
