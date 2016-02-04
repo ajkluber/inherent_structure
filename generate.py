@@ -173,9 +173,12 @@ if __name__ == "__main__":
         if rank == 0:
             if not os.path.exists("inherent_structures"):
                 os.mkdir("inherent_structures")
-            prep_minimization(model_dir, name, stride)
         comm.Barrier()
         os.chdir("inherent_structures")
+
+        if rank == 0:
+            prep_minimization(model_dir, name, stride)
+        comm.Barrier()
 
         traj_whole = mdtraj.load(trajfile, top=topology)
         n_frames = traj_whole.n_frames
