@@ -8,6 +8,7 @@ global kb
 kb = 0.0083145
 
 def get_energies(temps):
+    """Get any energies that exist from subdirectories"""
     Etot = [] 
     Enn = [] 
     Enat = [] 
@@ -132,7 +133,6 @@ if __name__ == "__main__":
     for tick in ax.yaxis.get_major_ticks():
         tick.label.set_fontsize(18)
     
-    #plt.plot(E_Tk_line, Tk_line(E_Tk_line), 'k')
     plt.annotate('$\\frac{1}{T_g} = \\frac{\\partial S }{\\partial E}$   ', xy=(E_GS, 0),  xycoords='data',
             xytext=(0.4, 0.2), textcoords='axes fraction', fontsize=30,
             arrowprops=dict(facecolor='gray', shrink=0.01))
@@ -145,7 +145,6 @@ if __name__ == "__main__":
     #plt.title("Low frustration   $b = 0.1$", fontsize=25)
     plt.legend(loc=2, fontsize=18)
     plt.xlim(0, beta*np.max(mid_bin))
-    #plt.ylim(0, np.max(SconfE))
     plt.ylim(0, beta*np.max(mid_bin))
     plt.savefig("REM_fit_of_dos.png", bbox_inches="tight") 
     plt.savefig("REM_fit_of_dos.pdf", bbox_inches="tight") 
