@@ -5,8 +5,8 @@ from simulation.calc.scripts.Enat import calc_Enat_for_directories
 from simulation.calc.scripts.Enn import calc_Enn_for_directories
 
 if __name__ == "__main__":
-    import time
-    starttime = time.time()
+    #import time
+    #starttime = time.time()
 
     temps = [ x.rstrip("\n") for x in open("ticatemps", "r").readlines() ]
     path_to_params = "."
@@ -21,4 +21,4 @@ if __name__ == "__main__":
             calc_Enn_for_directories(trajfiles, path_to_params=path_to_params)
         os.chdir("../..")
 
-    print "{} min".format((time.time() - starttime)/60.)
+    #print "{} min".format((time.time() - starttime)/60.)

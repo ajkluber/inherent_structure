@@ -133,9 +133,9 @@ if __name__ == "__main__":
     for tick in ax.yaxis.get_major_ticks():
         tick.label.set_fontsize(18)
     
-    plt.annotate('$\\frac{1}{T_g} = \\frac{\\partial S }{\\partial E}$   ', xy=(E_GS, 0),  xycoords='data',
-            xytext=(0.4, 0.2), textcoords='axes fraction', fontsize=30,
-            arrowprops=dict(facecolor='gray', shrink=0.01))
+    #plt.annotate('$\\frac{1}{T_g} = \\frac{\\partial S }{\\partial E}$   ', xy=(E_GS, 0),  xycoords='data',
+    #        xytext=(0.4, 0.2), textcoords='axes fraction', fontsize=30,
+    #        arrowprops=dict(facecolor='gray', shrink=0.01))
     plt.annotate("$T_f = {:.2f} K$\n$T_g = {:.2f} K$".format(T,Tg), xy=(0,0), xycoords="axes fraction",
             xytext=(0.4, 0.8), textcoords='axes fraction', fontsize=22)
     plt.ylabel("Entropy $S_{conf}$ ($k_B$)", fontsize=25)
