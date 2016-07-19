@@ -157,9 +157,9 @@ if __name__ == "__main__":
                         default="",
                         help="Path to .py script that modifies model.")
 
-    parser.add_argument("--mpi",
+    parser.add_argument("--serial",
                         action="store_true",
-                        help="Use when running in parallel.")
+                        help="Use when running serial.")
 
     # Performance on one processor is roughly 11-40sec/frame. 
     # So 1proc can do about 2500 frames over 8hours.
@@ -173,73 +173,11 @@ if __name__ == "__main__":
     n_frames = args.n_frames
     stride = args.stride
     path_to_py = args.path_to_py
-    mpi = args.mpi
+    serial = args.serial
 
     path_to_tables = os.path.dirname(path_to_ini) + "/tables"
 
-    if mpi:
-        # If parallel
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD   
-        size = comm.Get_size()  
-        rank = comm.Get_rank()
-
-        if rank == 0:
-            prep_minimization(path_to_ini, stride, size=size, path_to_py=path_to_py)
-
-        comm.Barrier()
-
-        os.chdir("inherent_structures")
-
-        # Distribute trajectory chunks to each processor
-        all_frame_idxs = np.arange(0, n_frames)
-        chunksize = len(all_frame_idxs)/size
-        if (len(all_frame_idxs) % size) != 0:
-            chunksize += 1
-        frames_for_proc = [ all_frame_idxs[i*chunksize:(i + 1)*chunksize:stride] for i in range(size) ]
-        n_frames_for_proc = [ len(x) for x in frames_for_proc ]
-
-        if rank == 0:
-            # send chunks of trajectory to all other processors. This is meant
-            # to limit unneccesary memory usage. Only a chunk is loaded into
-            # memory at a time.
-            rank_i = 0
-            for chunk in md.iterload("../" + trajfile, top="../" + topfile, chunk=chunksize):
-                sub_chunk = chunk.slice(np.arange(0, chunk.n_frames, stride))
-
-                if (rank_i == 0) and (rank == 0):
-                    traj = sub_chunk
-                else:
-                    comm.send(sub_chunk, dest=rank_i, tag=11)
-                rank_i += 1
-            
-        frame_idxs = frames_for_proc[rank]
-        if rank > 0:
-            # receive trajectory chunk.
-            traj = comm.recv(source=0, tag=11)
-
-        if not os.path.exists("rank_{}".format(rank)):
-            os.mkdir("rank_{}".format(rank))
-        os.chdir("rank_{}".format(rank))
-        run_minimization(path_to_tables, frame_idxs, traj)
-        os.chdir("..")
-
-        # If all trajectories finished then bring them together.
-        comm.Barrier()
-
-        if rank == 0:
-            frame_idxs = np.concatenate([ np.loadtxt("rank_" + str(x) + "/frames_fin.dat", dtype=int) for x in range(size) ])
-            Etot = np.concatenate([ np.loadtxt("rank_" + str(x) + "/Etot.dat") for x in range(size) ])
-            np.savetxt("frames_fin.dat", frame_idxs, fmt="%5d")
-            np.save("Etot.npy", Etot)
-
-            cat_trajs = " ".join([ "rank_" + str(x) + "/all_frames.xtc" for x in range(size) ])
-            with open("trjcat.log", "w") as fout:
-                sb.call("trjcat_sbm -f " + cat_trajs + " -o traj.xtc -cat",
-                    shell=True, stderr=fout, stdout=fout)
-
-        os.chdir("..")
-    else:
+    if serial:
         prep_minimization(path_to_ini, stride, path_to_py=path_to_py)
         os.chdir("inherent_structures")
 
@@ -254,4 +192,69 @@ if __name__ == "__main__":
         sb.call("cp frames_fin.dat ../frames_fin.dat", shell=True)
 
         os.chdir("..")
+        os.chdir("..")
+
+    else:
+        # If parallel
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD   
+        size = comm.Get_size()  
+        rank = comm.Get_rank()
+
+        if rank == 0:
+            prep_minimization(path_to_ini, stride, size=size, path_to_py=path_to_py)
+
+        comm.Barrier()
+
+        os.chdir("inherent_structures")
+
+        # Distribute trajectory chunks to each processor
+        chunksize = n_frames/size
+        if (n_frames % size) != 0:
+            chunksize += 1
+
+        if rank == 0:
+            # send chunks of trajectory to all other processors. This is meant
+            # to limit unneccesary memory usage. Only a chunk is loaded into
+            # memory at a time.
+            rank_i = 0
+            start_idx = 0
+            for chunk in md.iterload("../" + trajfile, top="../" + topfile, chunk=chunksize):
+                chunk_idxs = np.arange(0, chunk.n_frames, stride)
+                sub_chunk = chunk.slice(chunk_idxs)
+
+                if (rank_i == 0) and (rank == 0):
+                    frame_idxs = chunk_idxs + start_idx
+                    traj = sub_chunk
+                else:
+                    comm.send(chunk_idxs + start_idx, dest=rank_i, tag=7)
+                    comm.send(sub_chunk, dest=rank_i, tag=11)
+                rank_i += 1
+                start_idx += chunk.n_frames
+            
+        if rank > 0:
+            # receive trajectory chunk and corresponding frame indices.
+            frame_idxs = comm.recv(source=0, tag=7)
+            traj = comm.recv(source=0, tag=11)
+
+        if not os.path.exists("rank_{}".format(rank)):
+            os.mkdir("rank_{}".format(rank))
+        os.chdir("rank_{}".format(rank))
+        run_minimization(path_to_tables, frame_idxs, traj)
+        os.chdir("..")
+
+        # If all trajectories finished then bring them together.
+        comm.Barrier()
+
+        if rank == 0:
+            frame_fin = np.concatenate([ np.loadtxt("rank_" + str(x) + "/frames_fin.dat", dtype=int) for x in range(size) ])
+            Etot = np.concatenate([ np.loadtxt("rank_" + str(x) + "/Etot.dat") for x in range(size) ])
+            np.savetxt("frames_fin.dat", frame_fin, fmt="%5d")
+            np.save("Etot.npy", Etot)
+
+            cat_trajs = " ".join([ "rank_" + str(x) + "/all_frames.xtc" for x in range(size) ])
+            with open("trjcat.log", "w") as fout:
+                sb.call("trjcat_sbm -f " + cat_trajs + " -o traj.xtc -cat",
+                    shell=True, stderr=fout, stdout=fout)
+
         os.chdir("..")
