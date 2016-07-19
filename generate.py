@@ -127,11 +127,6 @@ def restart(trajfile, topology):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Energy minimization for inherent structure analysis.")
-    parser.add_argument("--name",
-                        type=str,
-                        required=True,
-                        help="Name of .ini file.")
-
     parser.add_argument("--topfile",
                         type=str,
                         required=True,
@@ -172,7 +167,6 @@ if __name__ == "__main__":
     # accordingingly
     
     args = parser.parse_args()
-    name = args.name
     topfile = args.topfile
     trajfile = args.trajfile
     path_to_ini = args.path_to_ini
@@ -191,7 +185,7 @@ if __name__ == "__main__":
         rank = comm.Get_rank()
 
         if rank == 0:
-            prep_minimization(path_to_ini, path_to_py, stride, size=size)
+            prep_minimization(path_to_ini, stride, size=size, path_to_py=path_to_py)
 
         comm.Barrier()
 
@@ -246,7 +240,7 @@ if __name__ == "__main__":
 
         os.chdir("..")
     else:
-        prep_minimization(path_to_ini, stride)
+        prep_minimization(path_to_ini, stride, path_to_py=path_to_py)
         os.chdir("inherent_structures")
 
         # run minimization
