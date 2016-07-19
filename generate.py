@@ -43,11 +43,15 @@ rm conf.gro mdout.mdp topol_4.5.tpr traj.trr md.log ener.edr confout.gro Energy.
 """.format(path_to_tables)
     return script
 
-def prep_minimization(path_to_ini, name, stride, size=1):
+def prep_minimization(path_to_ini, stride, size=1, path_to_py=""):
+
+    ini_dir, ini_file = os.path.split(path_to_ini)
+    path_to_tables = ini_dir + "/tables"
+
     if not os.path.exists("inherent_structures"):
         os.mkdir("inherent_structures")
-    if not os.path.exists(path_to_ini + "/tables"):
-        os.mkdir(path_to_ini + "/tables")
+    if not os.path.exists(path_to_tables):
+        os.mkdir(path_to_tables)
 
     with open("stride", "w") as fout:
         fout.write(str(stride))
@@ -63,17 +67,35 @@ def prep_minimization(path_to_ini, name, stride, size=1):
 
     # load model
     cwd = os.getcwd()
-    os.chdir(path_to_ini)
-    model, fitopts = mdb.inputs.load_model(name + ".ini")
+    os.chdir(ini_dir)
+    model, fitopts = mdb.inputs.load_model(ini_file)
+    if path_to_py != "":
+        if not os.path.exists(path_to_py):
+            raise IOError(path_to_py + " does not exist!")
+        else:
+            os.chdir(os.path.dirname(path_to_py))
+            import importlib
+            modify_py = importlib.import_module(os.path.basename(path_to_py).split(".py")[0])
+            model = modify_py.augment_model(model)
     os.chdir(cwd)
 
     # save model files
     writer = mdb.models.output.GromacsFiles(model)
-    writer.write_simulation_files(path_to_tables=path_to_ini + "/tables")
+    writer.write_simulation_files(path_to_tables=path_to_tables)
     os.chdir("..")
 
 def run_minimization(path_to_tables, frame_idxs, traj):
-    """Perform energy minimization on each frame"""
+    """Perform energy minimization on each frame
+    
+    Parameters
+    ----------
+    path_to_tables : str
+        Full path to the directory that holds the tables/ subdirectory.
+    frame_idxs : np.ndarray (n_frames,)
+        Indices of frames that will be minimized.
+    traj : obj. mdtraj.Trajectory
+        The thermalized trajectory to be minimize.
+    """
 
     # Minimization needs to be done
     np.savetxt("frame_idxs.dat", frame_idxs, fmt="%d")
@@ -119,6 +141,11 @@ if __name__ == "__main__":
                         type=str,
                         required=True,
                         help="Path to .ini file.")
+
+    parser.add_argument("--n_frames",
+                        type=int,
+                        required=True,
+                        help="Number of frames in trajectory.")
     
     parser.add_argument("--trajfile",
                         type=str,
@@ -130,10 +157,10 @@ if __name__ == "__main__":
                         default=10,
                         help="Number of frames to stride. Subsample.")
 
-    parser.add_argument("--n_frames",
-                        type=int,
-                        default=int(6E5),
-                        help="Number of frames in trajectory.")
+    parser.add_argument("--path_to_py",
+                        type=str,
+                        default="",
+                        help="Path to .py script that modifies model.")
 
     parser.add_argument("--mpi",
                         action="store_true",
@@ -151,7 +178,10 @@ if __name__ == "__main__":
     path_to_ini = args.path_to_ini
     n_frames = args.n_frames
     stride = args.stride
+    path_to_py = args.path_to_py
     mpi = args.mpi
+
+    path_to_tables = os.path.dirname(path_to_ini) + "/tables"
 
     if mpi:
         # If parallel
@@ -161,7 +191,7 @@ if __name__ == "__main__":
         rank = comm.Get_rank()
 
         if rank == 0:
-            prep_minimization(path_to_ini, name, stride, size=size)
+            prep_minimization(path_to_ini, path_to_py, stride, size=size)
 
         comm.Barrier()
 
@@ -176,6 +206,9 @@ if __name__ == "__main__":
         n_frames_for_proc = [ len(x) for x in frames_for_proc ]
 
         if rank == 0:
+            # send chunks of trajectory to all other processors. This is meant
+            # to limit unneccesary memory usage. Only a chunk is loaded into
+            # memory at a time.
             rank_i = 0
             for chunk in md.iterload("../" + trajfile, top="../" + topfile, chunk=chunksize):
                 sub_chunk = chunk.slice(np.arange(0, chunk.n_frames, stride))
@@ -188,42 +221,43 @@ if __name__ == "__main__":
             
         frame_idxs = frames_for_proc[rank]
         if rank > 0:
+            # receive trajectory chunk.
             traj = comm.recv(source=0, tag=11)
-        #print rank, traj.n_frames, traj.time[:2]/0.5, frame_idxs[:2], traj.time[-2:]/0.5, frame_idxs[-2:]  ## DEBUGGING
 
         if not os.path.exists("rank_{}".format(rank)):
             os.mkdir("rank_{}".format(rank))
         os.chdir("rank_{}".format(rank))
-        run_minimization(path_to_ini + "/tables", frame_idxs, traj)
+        run_minimization(path_to_tables, frame_idxs, traj)
         os.chdir("..")
 
         # If all trajectories finished then bring them together.
         comm.Barrier()
 
-        frame_idxs = np.concatenate([ np.loadtxt("rank_" + str(x) + "/frames_fin.dat", dtype=int) for x in range(size) ])
-        Etot = np.concatenate([ np.loadtxt("rank_" + str(x) + "/Etot.dat") for x in range(size) ])
-        np.savetxt("frames_fin.dat", frame_idxs, fmt="%5d")
-        np.save("Etot.npy", Etot)
+        if rank == 0:
+            frame_idxs = np.concatenate([ np.loadtxt("rank_" + str(x) + "/frames_fin.dat", dtype=int) for x in range(size) ])
+            Etot = np.concatenate([ np.loadtxt("rank_" + str(x) + "/Etot.dat") for x in range(size) ])
+            np.savetxt("frames_fin.dat", frame_idxs, fmt="%5d")
+            np.save("Etot.npy", Etot)
 
-        cat_trajs = " ".join([ "rank_" + str(x) + "/all_frames.xtc" for x in range(size) ])
-        with open("trjcat.log", "w") as fout:
-            sb.call("trjcat_sbm -f " + cat_trajs + " -o traj.xtc -cat",
-                shell=True, stderr=fout, stdout=fout)
+            cat_trajs = " ".join([ "rank_" + str(x) + "/all_frames.xtc" for x in range(size) ])
+            with open("trjcat.log", "w") as fout:
+                sb.call("trjcat_sbm -f " + cat_trajs + " -o traj.xtc -cat",
+                    shell=True, stderr=fout, stdout=fout)
 
         os.chdir("..")
-
     else:
-        if not os.path.exists("inherent_structures"):
-            os.mkdir("inherent_structures")
+        prep_minimization(path_to_ini, stride)
         os.chdir("inherent_structures")
-        # save tables
-        prep_minimization(path_to_ini, name, stride)
 
         # run minimization
         frame_idxs = np.arange(0, n_frames, stride)
         traj = md.load("../" + trajfile, top="../" + topfile, stride=stride)
-        run_minimization(path_to_ini + "/tables", frame_idxs, traj)
+        if not os.path.exists("rank_0"):
+            os.mkdir("rank_0")
+        os.chdir("rank_0")
+        run_minimization(path_to_tables, frame_idxs, traj)
+        sb.call("mv all_frames.xtc ../traj.xtc", shell=True)
+        sb.call("cp frames_fin.dat ../frames_fin.dat", shell=True)
 
-        sb.call("mv all_frames.xtc traj.xtc", shell=True)
-
+        os.chdir("..")
         os.chdir("..")
