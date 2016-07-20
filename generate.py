@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import numpy as np
 import subprocess as sb
@@ -69,13 +70,13 @@ def prep_minimization(path_to_ini, stride, size=1, path_to_py=""):
     cwd = os.getcwd()
     os.chdir(ini_dir)
     model, fitopts = mdb.inputs.load_model(ini_file)
+
     if path_to_py != "":
         if not os.path.exists(path_to_py):
             raise IOError(path_to_py + " does not exist!")
         else:
-            os.chdir(os.path.dirname(path_to_py))
-            import importlib
-            modify_py = importlib.import_module(os.path.basename(path_to_py).split(".py")[0])
+            import imp
+            modify_py = imp.load_source("DUMMY", path_to_py)
             model = modify_py.augment_model(model)
     os.chdir(cwd)
 
@@ -172,12 +173,13 @@ if __name__ == "__main__":
     path_to_ini = args.path_to_ini
     n_frames = args.n_frames
     stride = args.stride
-    path_to_py = args.path_to_py
+    path_to_py = os.path.abspath(args.path_to_py)
     serial = args.serial
 
     path_to_tables = os.path.dirname(path_to_ini) + "/tables"
 
     if serial:
+        # when running on only one processor
         prep_minimization(path_to_ini, stride, path_to_py=path_to_py)
         os.chdir("inherent_structures")
 
@@ -195,7 +197,7 @@ if __name__ == "__main__":
         os.chdir("..")
 
     else:
-        # If parallel
+        # running in parallel
         from mpi4py import MPI
         comm = MPI.COMM_WORLD   
         size = comm.Get_size()  
@@ -208,15 +210,14 @@ if __name__ == "__main__":
 
         os.chdir("inherent_structures")
 
-        # Distribute trajectory chunks to each processor
-        chunksize = n_frames/size
-        if (n_frames % size) != 0:
-            chunksize += 1
-
         if rank == 0:
-            # send chunks of trajectory to all other processors. This is meant
-            # to limit unneccesary memory usage. Only a chunk is loaded into
-            # memory at a time.
+            # distribute trajectory chunks to all processors. This reduces
+            # memory usage, because only one chunk is loaded into memory at a
+            # time.
+            chunksize = n_frames/size
+            if (n_frames % size) != 0:
+                chunksize += 1
+
             rank_i = 0
             start_idx = 0
             for chunk in md.iterload("../" + trajfile, top="../" + topfile, chunk=chunksize):
