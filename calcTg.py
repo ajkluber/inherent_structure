@@ -7,42 +7,20 @@ import matplotlib.pyplot as plt
 global kb
 kb = 0.0083145
 
-def get_energies(temps):
+def get_energies(temps, bounds):
     """Get any energies that exist from subdirectories"""
-    Etot = [] 
-    Enn = [] 
-    Enat = [] 
-    Etot_U = [] 
-    Enn_U = [] 
-    Enat_U = [] 
-    frames_fin = []
-    U_frames = []
-    for i in range(len(temps)): 
-        print "{}".format(temps[i])
-        Q = np.loadtxt("{}/Qtanh_0_05.dat".format(temps[i]))
 
-        os.chdir("{}/inherent_structures".format(temps[i]))
-        frm_files = glob.glob("rank_*/frames_fin.dat")
-        dirs = [ x.split("/")[0] for x in frm_files ]
-        
-        frames_fin_temp = [ np.loadtxt(x, dtype=int) for x in frm_files ]
-        U = [ (Q[x] > bounds[0]) & (Q[x] < bounds[1]) for x in frames_fin_temp ]
-        frames_fin.append(np.concatenate(frames_fin_temp))
+    Q = np.concatenate([ np.load(x + "/Qtanh_0_05.npy") for x in temps ])
+    frames_fin = np.concatenate([ np.loadtxt(x + "/inherent_structures/frames_fin.dat", dtype=int) for x in temps ])
+    U = (Q[frames_fin] > bounds[0]) & (Q[frames_fin] < bounds[1])
+    Etot = np.concatenate([ np.load(x + "/inherent_structures/Etot.npy") for x in temps ])
+    Enat = np.concatenate([ np.load(x + "/inherent_structures/Enat.npy") for x in temps ])
+    Enon = np.concatenate([ np.load(x + "/inherent_structures/Enon.npy") for x in temps ])
+    Etot_U = Etot[U]
+    Enat_U = Enat[U]
+    Enon_U = Enon[U]
 
-        Etot_temp = [ np.loadtxt("{}/Etot.dat".format(x)) for x in dirs ] 
-        Enat_temp = [ np.loadtxt("{}/Enative.dat".format(x)) for x in dirs ] 
-        Enn_temp = [ np.loadtxt("{}/Enonnative.dat".format(x)) for x in dirs ] 
-
-        Etot_U.append(np.concatenate([ Etot_temp[x][U[x]] for x in range(len(U)) ]))
-        Enat_U.append(np.concatenate([ Enat_temp[x][U[x]] for x in range(len(U))]))
-        Enn_U.append(np.concatenate([ Enn_temp[x][U[x]] for x in range(len(U))]))
-
-        Etot.append(np.concatenate(Etot_temp))
-        Enat.append(np.concatenate(Enat_temp))
-        Enn.append(np.concatenate(Enn_temp))
-
-        os.chdir("../..")
-    return Etot, Enat, Enn, Etot_U, Enat_U, Enn_U, frames_fin
+    return Etot, Enat, Enon, Etot_U, Enat_U, Enon_U, frames_fin
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="inherent structure analysis to get Tg")
@@ -59,21 +37,23 @@ if __name__ == "__main__":
     display = args.display
     nbins = args.n_bins
 
-    temps = [ x.rstrip("\n") for x in open("ticatemps", "r").readlines() ]
-    T = float(temps[0].split("_")[0])
     nbins = 100
-    #nbins_U = 30
     nbins_U = 100
-    beta = 1./(T*kb)
     
-    Q_U = np.loadtxt("Qtanh_0_05_profile/minima.dat")[0]
-    bounds = (0, Q_U + 5)
-    #bounds = (Q_U - 5, Q_U + 5)
+    with open("Qtanh_0_05_profile/T_used.dat", "r") as fin:
+        T = float(fin.read())
+    beta = 1./(T*kb)
 
-    Etot, Enat, Enn, Etot_U, Enat_U, Enn_U, frames_fin = get_energies(temps)
+    Q_U = np.loadtxt("Qtanh_0_05_profile/minima.dat")[0]
+    #bounds = (0, Q_U + 5)
+    bounds = (Q_U - 5, Q_U + 5)
+
+    temps = [ "T_{:.2f}_{}".format(T,x) for x in [1,2,3] ]
+
+    Etot, Enat, Enon, Etot_U, Enat_U, Enon_U, frames_fin = get_energies(temps, bounds)
 
     # histogram energies
-    nE, bins = np.histogram(np.concatenate(Etot) - np.concatenate(Enn), bins=nbins)
+    nE, bins = np.histogram(Etot - Enon, bins=nbins)
     dE = bins[1] - bins[0]
     probE = nE.astype(float)*dE
     probE[probE == 0] = np.min(probE[probE != 0])
@@ -81,7 +61,7 @@ if __name__ == "__main__":
     minE = np.min(mid_bin)
     mid_bin -= minE
 
-    nE_U, bins_U = np.histogram(np.concatenate(Enn), bins=nbins_U, density=True)
+    nE_U, bins_U = np.histogram(Enon, bins=nbins_U, density=True)
     prob_U = np.float(len(Etot_U))/np.float(len(Etot))
     dE_U = bins_U[1] - bins_U[0]
     probE_U = nE_U.astype(float)*dE_U
@@ -114,7 +94,7 @@ if __name__ == "__main__":
 
     np.savetxt("E_mid_bin.dat", mid_bin)
     np.savetxt("Sconf_tot.dat", SconfE)
-    np.savetxt("Sconf_Enn.dat", SconfE_U)
+    np.savetxt("Sconf_Enon.dat", SconfE_U)
 
     # solve for other REM parameters using fit.
     Efit = np.linspace(0, beta*max(mid_bin), 1000)
