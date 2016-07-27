@@ -72,12 +72,9 @@ def prep_minimization(path_to_ini, stride, size=1, path_to_py=""):
     model, fitopts = mdb.inputs.load_model(ini_file)
 
     if path_to_py != "":
-        if not os.path.exists(path_to_py):
-            raise IOError(path_to_py + " does not exist!")
-        else:
-            import imp
-            modify_py = imp.load_source("DUMMY", path_to_py)
-            model = modify_py.augment_model(model)
+        import imp
+        modify_py = imp.load_source("DUMMY", path_to_py)
+        model = modify_py.augment_model(model)
     os.chdir(cwd)
 
     # save model files
@@ -173,8 +170,13 @@ if __name__ == "__main__":
     path_to_ini = args.path_to_ini
     n_frames = args.n_frames
     stride = args.stride
-    path_to_py = os.path.abspath(args.path_to_py)
     serial = args.serial
+    path_to_py = args.path_to_py
+
+    if path_to_py != "":
+        path_to_py = os.path.abspath(args.path_to_py)
+        if not os.path.exists(path_to_py):
+            raise IOError(path_to_py + " does not exist!")
 
     path_to_tables = os.path.dirname(path_to_ini) + "/tables"
 
