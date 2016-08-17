@@ -98,6 +98,11 @@ def histogram_energies_in_unfolded_state():
     Tk_line = lambda E: dSdE(E_GS)*E - dSdE(E_GS)*E_GS
     E_Tk_line = np.linspace(0.95*E_GS, 1.01*E_GS, 1000)
 
+    # Save:
+    # - Sconf(Enat, Enon)
+    # - Enat_grid
+    # - Enon_grid
+
     # Plot
     plt.figure()
     plt.plot(beta*mid_bin, beta*mid_bin, label="$E$")
@@ -191,8 +196,8 @@ if __name__ == "__main__":
 
     #bins_Enat_Enn = (10, 100) 
     bins_Enat_Enn = (50, 50) 
-    nbins_Enat = 50
-    nbins_Enon = 50
+    nbins_Enat = 20
+    nbins_Enon = 20
     
     with open("Qtanh_0_05_profile/T_used.dat", "r") as fin:
         T = float(fin.read())
@@ -202,12 +207,16 @@ if __name__ == "__main__":
 
     Etot, Enat, Enon, frame_idxs = get_energies(temp_dirs)
 
+    # Calculate microcanonical entropy
+
     P_Enat_Enon, xedges, yedges = np.histogram2d(Enat, Enon, bins=(nbins_Enat, nbins_Enon), normed=True)
 
     # Get the values of energy for each bin center.
     Enat_mid_bin = 0.5*(xedges[1:] + xedges[:-1])
     Enon_mid_bin = 0.5*(yedges[1:] + yedges[:-1])
     Enat_grid, Enon_grid = np.meshgrid(Enat_mid_bin, Enon_mid_bin)
+    Enat_grid = Enat_grid.T
+    Enon_grid = Enon_grid.T
     Etot_grid = Enat_grid + Enon_grid
 
     # Determine the properties of the ground state.
@@ -239,31 +248,36 @@ if __name__ == "__main__":
     for i in range(nbins_Enat):
         # Fit Random Energy model (parabola) to density of states at each
         # stratum of E_native.
-        use_bins = (np.isnan(S_Enat_Enon[i,:]) == False) & (S_Enat_Enon > 0)
-        S_Enon = S_Enat_Enon[i,use_bins]
-        Enon_temp = Enon_mid_bin[use_bins]
+        use_bins = (np.isnan(S_Enat_Enon[i,:]) == False) & (S_Enat_Enon[i,:] > 0)
 
-        plt.plot(Enon_temp, S_Enon, label="{:.2f}".format(Enat_mid_bin[i]), color=cmap(color_idxs[i]))
+        if np.sum(use_bins) >= 3:
+            S_Enon = S_Enat_Enon[i,use_bins]
+            Enon_temp = Enon_mid_bin[use_bins]
 
-        #REM_Entropy(Enn, Ebar, dE, S_0)
-        popt, pcov = scipy.optimize.curve_fit(REM_Entropy, Enon_temp, S_Enon, p0=(-10, 10, 100))
-        Ebar, dE, S0 = popt
-        S_REM = REM_Entropy(Enon_mid_bin, *popt)
+            plt.plot(Enon_temp, S_Enon, label="{:.2f}".format(Enat_mid_bin[i]), color=cmap(color_idxs[i]))
 
-        Tg_Enat[i] = dE/np.sqrt(2.*kb*kb*S0)
+            #REM_Entropy(Enn, Ebar, dE, S_0)
+            popt, pcov = scipy.optimize.curve_fit(REM_Entropy, Enon_temp, S_Enon, p0=(-10, 10, 100))
+            Ebar, dE, S0 = popt
+            S_REM = REM_Entropy(Enon_mid_bin, *popt)
 
-        ymin, ymax = plt.ylim()
-        plt.plot(Enon_mid_bin, S_REM, 'k--')
-        plt.ylim(0, ymax)
+            Tg_Enat[i] = dE/np.sqrt(2.*kb*kb*S0)
+
+            # plot the REM fit
+            #ymin, ymax = plt.ylim()
+            #plt.plot(Enon_mid_bin, S_REM, 'k--')
+            #plt.ylim(0, ymax)
+    #print Tg_Enat[Tg_Enat > 0]
 
     #plt.legend(loc=2)
     plt.xlabel("$E_{non}$")
     plt.ylabel("$\\log P(E_{non})$")
 
-    plt.figure()
-    plt.plot(Enat_mid_bin, Tg_Enat)
-    plt.xlabel("$E_{nat}$")
-    plt.ylabel("$T_g$")
-    plt.title("Glass temperature")
-    plt.show()
+    #plt.figure()
+    #plt.plot(Enat_mid_bin, Tg_Enat)
+    #plt.xlabel("$E_{nat}$")
+    #plt.ylabel("$T_g$")
+    #plt.title("Glass temperature")
+    #plt.show()
 
+    plt.show()
