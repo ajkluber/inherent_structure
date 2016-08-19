@@ -6,7 +6,7 @@ import subprocess as sb
 
 import mdtraj as md
 
-import simulation.mdp
+import simulation.gromacs.mdp
 import model_builder as mdb
 
 def minimization_script(path_to_tables):
@@ -62,7 +62,7 @@ def prep_minimization(path_to_ini, stride, size=1, path_to_py=""):
     
     # save simulation files and energy minimization protocol.
     os.chdir("inherent_structures")
-    mdp = simulation.mdp.energy_minimization()
+    mdp = simulation.gromacs.mdp.energy_minimization()
     with open("em.mdp", "w") as fout:
         fout.write(mdp)
 
