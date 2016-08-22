@@ -3,10 +3,6 @@ import glob
 import argparse
 import numpy as np
 import scipy.optimize
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-cmap = cm.get_cmap("viridis") 
-
 
 global kb
 kb = 0.0083145
@@ -20,120 +16,6 @@ def get_energies(temp_dirs):
     Enon = np.concatenate([ np.load(x + "/inherent_structures/Enon.npy") for x in temp_dirs ])
 
     return Etot, Enat, Enon, frame_idxs
-
-def histogram_energies_in_unfolded_state():
-    # Limit
-    #Q_U = np.loadtxt("Qtanh_0_05_profile/minima.dat")[0]
-    #bounds = (0, Q_U + 5)
-    #bounds = (Q_U - 5, Q_U + 5)
-
-    #Q = np.concatenate([ np.load(x + "/Qtanh_0_05.npy") for x in temp_dirs ])
-    #U = (Q[frame_idxs] > bounds[0]) & (Q[frame_idxs] < bounds[1])
-    #Etot_U = Etot[U]
-    #Enat_U = Enat[U]
-    #Enon_U = Enon[U]
-
-    # histogram energies. Histogram at fixed native energy.
-    nE, bins = np.histogram(Etot - Enon, bins=nbins)
-    dE = bins[1] - bins[0]
-    probE = nE.astype(float)*dE
-    #probE[probE == 0] = np.min(probE[probE != 0])   # THIS LINE IS A PROBLEM
-    mid_bin = 0.5*(bins[1:] + bins[:-1])
-    minE = np.min(mid_bin)
-    mid_bin -= minE
-
-    # remove bins without entries
-    nonzero = nE > 100
-    mid_bin = mid_bin[nonzero]
-    probE = probE[nonzero]
-
-    nE_U, bins_U = np.histogram(Enon, bins=nbins_U, density=True)
-    prob_U = np.float(len(Etot_U))/np.float(len(Etot))
-    dE_U = bins_U[1] - bins_U[0]
-    probE_U = nE_U.astype(float)*dE_U
-    #probE_U[probE_U == 0] = np.min(probE_U[probE_U != 0]) # THIS LINE IS A PROBLEM
-    mid_bin_U = 0.5*(bins_U[1:] + bins_U[:-1])
-    mid_bin_U -= minE
-
-    # remove bins without entries
-    nonzero = nE_U > 0
-    mid_bin_U = mid_bin_U[nonzero]
-    probE_U = probE_U[nonzero]
-
-    # Equation (7) of Nakagawa, Peyrard 2006. Configurational entropy.
-    #omegaE = (probE/probE[0])*np.exp(beta*mid_bin)
-    #SconfE = np.log(omegaE)
-    SconfE = np.log((probE/probE[0])) + beta*mid_bin
-
-    #omegaE_U = ((prob_U*probE_U)/(probE[0]))*np.exp(beta*mid_bin_U)
-    #SconfE_U = np.log(omegaE_U)
-    SconfE_U = np.log((prob_U*probE_U)/(probE[0])) + beta*mid_bin_U
-
-    # REM fit to the configurational entropy yields Tg!
-    coeff = np.polyfit(beta*mid_bin_U, SconfE_U, 2)
-    if coeff[0] > 0:
-        coeff = np.polyfit(beta*mid_bin_U[5:-5], SconfE_U[5:-5], 2)
-    a, b, c = coeff
-    E_GS = (-b + np.sqrt(b*b - 4.*a*c))/(2.*a)
-    SconfE_U_interp = np.poly1d(coeff)
-    dSdE = np.poly1d(np.array([2.*a, b]))
-    Tg = 1./(kb*dSdE(E_GS))
-    print Tg
-
-    if not os.path.exists("Tg_calc"):
-        os.mkdir("Tg_calc")
-    os.chdir("Tg_calc")
-
-    # Tg is ~74K using Etot or ~2.5K using Enonnative
-    with open("Tg_Enonnative.dat", "w") as fout:
-        fout.write("%.2f" % Tg)
-
-    np.savetxt("E_mid_bin.dat", mid_bin)
-    np.savetxt("E_mid_bin_U.dat", mid_bin_U)
-    np.savetxt("Sconf_tot.dat", SconfE)
-    np.savetxt("Sconf_Enon.dat", SconfE_U)
-
-    # solve for other REM parameters using fit.
-    Efit = np.linspace(0, beta*max(mid_bin), 1000)
-    Tk_line = lambda E: dSdE(E_GS)*E - dSdE(E_GS)*E_GS
-    E_Tk_line = np.linspace(0.95*E_GS, 1.01*E_GS, 1000)
-
-    # Save:
-    # - Sconf(Enat, Enon)
-    # - Enat_grid
-    # - Enon_grid
-
-    # Plot
-    plt.figure()
-    plt.plot(beta*mid_bin, beta*mid_bin, label="$E$")
-    plt.plot(beta*mid_bin, SconfE, label="$S_{conf}$")
-    plt.plot(beta*mid_bin_U, SconfE_U, label="$S_{conf}(Q_u)$")
-    plt.plot(Efit, SconfE_U_interp(Efit), ls='--', lw=1, label="REM fit")
-    ax = plt.gca()
-    for tick in ax.xaxis.get_major_ticks():
-        tick.label.set_fontsize(18)
-    for tick in ax.yaxis.get_major_ticks():
-        tick.label.set_fontsize(18)
-    
-    #plt.annotate('$\\frac{1}{T_g} = \\frac{\\partial S }{\\partial E}$   ', xy=(E_GS, 0),  xycoords='data',
-    #        xytext=(0.4, 0.2), textcoords='axes fraction', fontsize=30,
-    #        arrowprops=dict(facecolor='gray', shrink=0.01))
-    plt.annotate("$T_f = {:.2f} K$\n$T_g = {:.2f} K$".format(T,Tg), xy=(0,0), xycoords="axes fraction",
-            xytext=(0.4, 0.8), textcoords='axes fraction', fontsize=22)
-    plt.ylabel("Entropy $S_{conf}$ ($k_B$)", fontsize=25)
-    plt.xlabel("Energy ($k_B T$)", fontsize=25)
-    #plt.title("$T_f = {:.2f}$  $T_g = {:.2f}$".format(T,Tg))
-    #plt.title("High frustration   $b = 1.00$", fontsize=25)
-    #plt.title("Low frustration   $b = 0.1$", fontsize=25)
-    plt.legend(loc=2, fontsize=18)
-    plt.xlim(0, beta*np.max(mid_bin))
-    plt.ylim(0, beta*np.max(mid_bin))
-    plt.savefig("REM_fit_of_dos.png", bbox_inches="tight") 
-    plt.savefig("REM_fit_of_dos.pdf", bbox_inches="tight") 
-    if display:
-        plt.show()
-
-    os.chdir("..")
 
 def REM_Entropy(Enn, Ebar, dE, S_0):
     a = -1./(np.abs(dE)**2)
@@ -177,27 +59,23 @@ def calculate_thermal_observables():
     plt.show()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="inherent structure analysis to get Tg")
-    parser.add_argument("--display",
-                        action='store_true',
-                        help="Don't display plot.")
+#    parser = argparse.ArgumentParser(description="inherent structure analysis to get Tg")
+#    parser.add_argument("--display",
+#                        action='store_true',
+#                        help="Don't display plot.")
+#
+#    parser.add_argument("--n_bins",
+#                        type=int,
+#                        default=100,
+#                        help="Number of bins.")
+#
+#    args = parser.parse_args()
+#    display = args.display
+#    nbins = args.n_bins
 
-    parser.add_argument("--n_bins",
-                        type=int,
-                        default=100,
-                        help="Number of bins.")
-
-    args = parser.parse_args()
-    display = args.display
-    nbins = args.n_bins
-
-    nbins = 100
-    nbins_U = 100
-
-    #bins_Enat_Enn = (10, 100) 
-    bins_Enat_Enn = (50, 50) 
     nbins_Enat = 20
     nbins_Enon = 20
+    color_idxs = [ float(x)/nbins_Enat for x in range(nbins_Enat) ]
     
     with open("Qtanh_0_05_profile/T_used.dat", "r") as fin:
         T = float(fin.read())
@@ -206,8 +84,6 @@ if __name__ == "__main__":
     temp_dirs = [ "T_{:.2f}_{}".format(T,x) for x in [1,2,3] ]
 
     Etot, Enat, Enon, frame_idxs = get_energies(temp_dirs)
-
-    # Calculate microcanonical entropy
 
     P_Enat_Enon, xedges, yedges = np.histogram2d(Enat, Enon, bins=(nbins_Enat, nbins_Enon), normed=True)
 
@@ -229,24 +105,20 @@ if __name__ == "__main__":
     # because Etot = Enat + Enon
     P_Enat_Enon /= P_Enat0_Enn0
     not0 = np.nonzero(P_Enat_Enon)
+
+    # Calculate microcanonical entropy
     S_Enat_Enon = np.nan*np.zeros(P_Enat_Enon.shape)
     S_Enat_Enon[not0] = np.log(P_Enat_Enon[not0]) + beta*(Enat_grid[not0] - Enat0) + beta*(Enon_grid[not0] - Enon0)
     mask_vals = (S_Enat_Enon < 0) | (np.isnan(S_Enat_Enon))
     S_Enat_Enon_ma = np.ma.masked_where(mask_vals, S_Enat_Enon)
 
-    plt.figure()
-    plt.pcolormesh(Enat_grid, Enon_grid, S_Enat_Enon_ma, cmap=cmap) # Does this need to be transposed?
-    plt.xlabel("$E_{nat}$")
-    plt.ylabel("$E_{non}$")
-    plt.title("Entropy $S(E_{nat}, E_{non})$")
-    plt.colorbar()
-
-    color_idxs = [ float(x)/nbins_Enat for x in range(nbins_Enat) ]
-
-    Tg_Enat = np.zeros(nbins_Enat)
-    plt.figure()
+    # calculate Random Energy Model quantities
+    Tg_vs_Enat = np.zeros(nbins_Enat)
+    Ebar_vs_Enat = np.zeros(nbins_Enat)
+    dE_vs_Enat = np.zeros(nbins_Enat)
+    S0_vs_Enat = np.zeros(nbins_Enat)
     for i in range(nbins_Enat):
-        # Fit Random Energy model (parabola) to density of states at each
+        # Fit Random Energy model (parabola) to microcanonical entropy at each
         # stratum of E_native.
         use_bins = (np.isnan(S_Enat_Enon[i,:]) == False) & (S_Enat_Enon[i,:] > 0)
 
@@ -254,30 +126,56 @@ if __name__ == "__main__":
             S_Enon = S_Enat_Enon[i,use_bins]
             Enon_temp = Enon_mid_bin[use_bins]
 
-            plt.plot(Enon_temp, S_Enon, label="{:.2f}".format(Enat_mid_bin[i]), color=cmap(color_idxs[i]))
-
             #REM_Entropy(Enn, Ebar, dE, S_0)
             popt, pcov = scipy.optimize.curve_fit(REM_Entropy, Enon_temp, S_Enon, p0=(-10, 10, 100))
             Ebar, dE, S0 = popt
             S_REM = REM_Entropy(Enon_mid_bin, *popt)
 
-            Tg_Enat[i] = dE/np.sqrt(2.*kb*kb*S0)
+            Ebar_vs_Enat[i] = Ebar  
+            dE_vs_Enat[i] = dE  
+            S0_vs_Enat[i] = S0  
+            Tg_vs_Enat[i] = dE/np.sqrt(2.*kb*kb*S0)
 
-            # plot the REM fit
-            #ymin, ymax = plt.ylim()
-            #plt.plot(Enon_mid_bin, S_REM, 'k--')
-            #plt.ylim(0, ymax)
-    #print Tg_Enat[Tg_Enat > 0]
+#    import matplotlib.pyplot as plt
+#    import matplotlib.cm as cm
+#    cmap = cm.get_cmap("viridis") 
+#
+#    # Plot S(E_non) for each stratum of E_nat.
+#    plt.figure()
+#    for i in range(nbins_Enat):
+#        use_bins = (np.isnan(S_Enat_Enon[i,:]) == False) & (S_Enat_Enon[i,:] > 0)
+#        if np.sum(use_bins) >= 3:
+#            S_Enon = S_Enat_Enon[i,use_bins]
+#            Enon_temp = Enon_mid_bin[use_bins]
+#            plt.plot(Enon_temp, S_Enon, label="{:.2f}".format(Enat_mid_bin[i]), color=cmap(color_idxs[i]))
+#
+#    #plt.legend(loc=2)
+#    plt.xlabel("$E_{non}$ (k$_B$T)")
+#    plt.ylabel("$S(E_{non})$ (k$_B$)")
+#
+#    #plt.figure()
+#    #plt.plot(Enat_mid_bin, Tg_vs_Enat)
+#    #plt.xlabel("$E_{nat}$")
+#    #plt.ylabel("$T_g$")
+#    #plt.title("Glass temperature")
+#    #plt.show()
+#
+#    plt.figure()
+#    plt.pcolormesh(Enat_grid, Enon_grid, S_Enat_Enon_ma, cmap=cmap) # Does this need to be transposed?
+#    plt.xlabel("$E_{nat}$")
+#    plt.ylabel("$E_{non}$")
+#    plt.title("Entropy $S(E_{nat}, E_{non})$")
+#    plt.colorbar()
+#    plt.show()
 
-    #plt.legend(loc=2)
-    plt.xlabel("$E_{non}$")
-    plt.ylabel("$\\log P(E_{non})$")
-
-    #plt.figure()
-    #plt.plot(Enat_mid_bin, Tg_Enat)
-    #plt.xlabel("$E_{nat}$")
-    #plt.ylabel("$T_g$")
-    #plt.title("Glass temperature")
-    #plt.show()
-
-    plt.show()
+    if not os.path.exists("Tg_calc"):
+        os.mkdir("Tg_calc")
+    os.chdir("Tg_calc")
+    S_Enat_Enon_ma.dump("S_Enat_Enon.npy")
+    np.save("Enat_mid_bin.npy", Enat_mid_bin)
+    np.save("Enon_mid_bin.npy", Enon_mid_bin)
+    np.save("Ebar_vs_Enat.npy", Ebar_vs_Enat)
+    np.save("dE_vs_Enat.npy", dE_vs_Enat)
+    np.save("S0_vs_Enat.npy", S0_vs_Enat)
+    np.save("Tg_vs_Enat.npy", Tg_vs_Enat)
+    os.chdir("..")
