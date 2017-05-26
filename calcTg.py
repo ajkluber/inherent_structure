@@ -144,8 +144,6 @@ if __name__ == "__main__":
     peak_idx1 = np.argwhere(P_Enat == np.max(P_Enat[Enat_mid_bin < np.median(Enat)]))[0][0]
     peak_idx2 = np.argwhere(P_Enat == np.max(P_Enat[Enat_mid_bin >= np.median(Enat)]))[0][0]
 
-    # Peak to peak distance in P_Enat --> stability gap
-    dE_stab = Enat_mid_bin[peak_idx2] - Enat_mid_bin[peak_idx1] 
 
     # U = an interval around the unfolded state peak in P_Enat
     # Determine the width of the non-native interaction basin -> roughness
@@ -163,6 +161,10 @@ if __name__ == "__main__":
                     break
 
     U = (Enat > Enat_mid_bin[left_side]) & (Enat <= Enat_mid_bin[right_side])
+    N = (Enat < 0.9*np.min(Enat))
+    # Peak to peak distance in P_Enat --> stability gap
+    dE_stab = (Enat_mid_bin[peak_idx2] + np.mean(Enon[U])) - (Enat_mid_bin[peak_idx1] + np.mean(Enon[N]))
+
     P_U = np.sum(U)/float(len(U))
     P_Enon_U, Enon_bins = np.histogram(Enon[U], bins=nbins_Enon)
     Enon_mid_bin = 0.5*(Enon_bins[1:] + Enon_bins[:-1])
@@ -170,6 +172,7 @@ if __name__ == "__main__":
     nonzero = (P_Enon_U > 1)
     #S_Enon_U = np.ma.log(P_Enon_U_ma/P_U) + beta*Enon_mid_bin
     #S_Enon_U = np.ma.log(P_Enon_U[nonzero]/P_U) + beta*Enon_mid_bin[nonzero]
+
 
     popt, pcov = scipy.optimize.curve_fit(parabola, Enon_mid_bin[nonzero], np.log(P_Enon_U[nonzero]), p0=(-1, 5, 1))
 
@@ -184,7 +187,7 @@ if __name__ == "__main__":
     c_prime = c + beta*dE_stab
 
     Ebar = -b_prime/(2.*a)
-    S0 = c_prime - b*b/(4*a)
+    S0 = c_prime - b*b/(4*a) + 20
 
     Tg = dEnon/np.sqrt(2.*kb*kb*S0)
 
@@ -206,7 +209,7 @@ if __name__ == "__main__":
     np.save("S_REM_Enon.npy", S_REM)
 
     with open("REM_parameters.dat", "w") as fout:
-        fout.write("{:.2f} {:.2f} {:.2f} {:.2f}".format(dE_stab, dEnon, Ebar, S0))
+        fout.write("{:.2f} {:.2f} {:.2f} {:.2f}".format(beta*dE_stab, beta*dEnon, beta*Ebar, S0/kb))
     with open("Tg_Enonnative.dat", "w") as fout:
         fout.write("{:.2f}".format(Tg))
     with open("Tf.dat", "w") as fout:
