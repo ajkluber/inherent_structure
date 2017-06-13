@@ -45,7 +45,20 @@ rm conf.gro mdout.mdp topol_4.5.tpr traj.trr md.log ener.edr confout.gro Energy.
     return script
 
 def prep_minimization(path_to_ini, stride, size=1, path_to_py=""):
-
+    """Prepare for minimization
+    
+    Parameters
+    ----------
+    path_to_ini : str
+        File path to the '.ini' file for loading the simulation model
+    stride : int
+        Number of frames to skip.
+    size : int, opt. 
+        Number of processors used in calculation
+    path_to_py : str, opt.
+        File path to a script augment the simulation model (e.x. add non
+        standard interactions). 
+    """
     ini_dir, ini_file = os.path.split(path_to_ini)
     path_to_tables = ini_dir + "/tables"
 
@@ -82,7 +95,7 @@ def prep_minimization(path_to_ini, stride, size=1, path_to_py=""):
     writer.write_simulation_files(path_to_tables=path_to_tables)
     os.chdir("..")
 
-def run_minimization(path_to_tables, frame_idxs, traj):
+def run_minimization(path_to_tables, frame_idxs, traj, max_time, start_time):
     """Perform energy minimization on each frame
     
     Parameters
@@ -99,18 +112,21 @@ def run_minimization(path_to_tables, frame_idxs, traj):
     np.savetxt("frame_idxs.dat", frame_idxs, fmt="%d")
     # Loop over trajectory frames
     for i in xrange(traj.n_frames):
-        # perform energy minimization using gromacs
-        frm = traj.slice(i)
-        frm.save_gro("conf.gro")
-        script = minimization_script(path_to_tables)
-        with open("minimize.bash", "w") as fout:
-            fout.write(script)
-        cmd = "bash minimize.bash"
-        sb.call(cmd.split())
+        if (time.time() - start_time) >= max_time:
+            break
+        else:
+            # perform energy minimization using gromacs
+            frm = traj.slice(i)
+            frm.save_gro("conf.gro")
+            script = minimization_script(path_to_tables)
+            with open("minimize.bash", "w") as fout:
+                fout.write(script)
+            cmd = "bash minimize.bash"
+            sb.call(cmd.split())
 
-        # record frame idx
-        with open("frames_fin.dat", "a") as fout:
-            fout.write(str(frame_idxs[i]) + "\n")
+            # record frame idx
+            with open("frames_fin.dat", "a") as fout:
+                fout.write(str(frame_idxs[i]) + "\n")
 
 def restart(trajfile, topology):
     """TODO: write restart function"""
@@ -122,6 +138,8 @@ def restart(trajfile, topology):
         # minimize frames that were not finished
         traj_full = md.load(trajfile, top=topology)
         traj = traj_full.slice(frame_idxs)
+        # 
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Energy minimization for inherent structure analysis.")
@@ -159,10 +177,16 @@ if __name__ == "__main__":
                         action="store_true",
                         help="Use when running serial.")
 
+    parser.add_argument("--max_time",
+                        default=0.995*8*60*60.,
+                        help="Maximum runtime in secs.")
+
     # Performance on one processor is roughly 11-40sec/frame. 
     # So 1proc can do about 2500 frames over 8hours.
     # Adjust the number of processors (size) and subsample (stride)
     # accordingingly
+
+    start_time = time.time()
     
     args = parser.parse_args()
     topfile = args.topfile
@@ -171,6 +195,7 @@ if __name__ == "__main__":
     n_frames = args.n_frames
     stride = args.stride
     serial = args.serial
+    max_time = args.max_time
     path_to_py = args.path_to_py
 
     if path_to_py != "":
@@ -191,13 +216,11 @@ if __name__ == "__main__":
         if not os.path.exists("rank_0"):
             os.mkdir("rank_0")
         os.chdir("rank_0")
-        run_minimization(path_to_tables, frame_idxs, traj)
-        sb.call("mv all_frames.xtc ../traj.xtc", shell=True)
-        sb.call("cp frames_fin.dat ../frames_fin.dat", shell=True)
+        run_minimization(path_to_tables, frame_idxs, traj, max_time, start_time)
+        #sb.call("mv all_frames.xtc ../traj.xtc", shell=True)
+        #sb.call("cp frames_fin.dat ../frames_fin.dat", shell=True)
 
-        os.chdir("..")
-        os.chdir("..")
-
+        os.chdir("../..")
     else:
         # running in parallel
         from mpi4py import MPI
@@ -243,21 +266,21 @@ if __name__ == "__main__":
         if not os.path.exists("rank_{}".format(rank)):
             os.mkdir("rank_{}".format(rank))
         os.chdir("rank_{}".format(rank))
-        run_minimization(path_to_tables, frame_idxs, traj)
-        os.chdir("..")
+        run_minimization(path_to_tables, frame_idxs, traj, max_time, start_time)
+        os.chdir("../..")
 
-        # If all trajectories finished then bring them together.
-        comm.Barrier()
-
-        if rank == 0:
-            frame_fin = np.concatenate([ np.loadtxt("rank_" + str(x) + "/frames_fin.dat", dtype=int) for x in range(size) ])
-            Etot = np.concatenate([ np.loadtxt("rank_" + str(x) + "/Etot.dat") for x in range(size) ])
-            np.savetxt("frames_fin.dat", frame_fin, fmt="%5d")
-            np.save("Etot.npy", Etot)
-
-            cat_trajs = " ".join([ "rank_" + str(x) + "/all_frames.xtc" for x in range(size) ])
-            with open("trjcat.log", "w") as fout:
-                sb.call("trjcat_sbm -f " + cat_trajs + " -o traj.xtc -cat",
-                    shell=True, stderr=fout, stdout=fout)
-
-        os.chdir("..")
+#        # If all trajectories finished then bring them together.
+#        os.chdir("..")
+#        comm.Barrier()
+#
+#        if rank == 0:
+#            frame_fin = np.concatenate([ np.loadtxt("rank_" + str(x) + "/frames_fin.dat", dtype=int) for x in range(size) ])
+#            Etot = np.concatenate([ np.loadtxt("rank_" + str(x) + "/Etot.dat") for x in range(size) ])
+#            np.savetxt("frames_fin.dat", frame_fin, fmt="%5d")
+#            np.save("Etot.npy", Etot)
+#
+#            cat_trajs = " ".join([ "rank_" + str(x) + "/all_frames.xtc" for x in range(size) ])
+#            with open("trjcat.log", "w") as fout:
+#                sb.call("trjcat_sbm -f " + cat_trajs + " -o traj.xtc -cat",
+#                    shell=True, stderr=fout, stdout=fout)
+#        os.chdir("..")
