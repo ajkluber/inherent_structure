@@ -1,8 +1,7 @@
 import os
+import glob
 import numpy as np
 import subprocess as sb
-
-import mdtraj as md
 
 if __name__ == "__main__":
     os.chdir("inherent_structures")
