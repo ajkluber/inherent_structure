@@ -7,23 +7,7 @@ import scipy.optimize
 import matplotlib.pyplot as plt
 
 global kb
-kb = 0.0083145
-
-def get_frame_idxs(temp_dirs):
-    frame_idxs = np.concatenate([ np.loadtxt(x + "/inherent_structures/frames_fin.dat", dtype=int) for x in temp_dirs ])
-    return frame_idxs
-
-def get_total_energy(temp_dirs):
-    Etot = np.concatenate([ np.load(x + "/inherent_structures/Etot.npy") for x in temp_dirs ])
-    return Etot
-
-def get_native_nonnative_energies(temp_dirs):
-    """Get any energies that exist from subdirectories"""
-
-    Enat = np.concatenate([ np.load(x + "/inherent_structures/Enat.npy") for x in temp_dirs ])
-    Enon = np.concatenate([ np.load(x + "/inherent_structures/Enon.npy") for x in temp_dirs ])
-
-    return Enat, Enon
+kb = 0.0083145  # KJ/(MOL K)
 
 def REM_Entropy(Enn, Ebar, dE, S_0):
     a = -0.5/(dE**2)
@@ -39,7 +23,7 @@ def thermal_average(T, A, E, S_E, mask_vals):
     return np.sum(A[mask_vals == False]*np.exp(-(E[mask_vals == False] - T*S_E[mask_vals == False])/(kb*T)))
 
 def calculate_Tg_vs_Enat(Enat, Enon, nbins_Enat, nbins_Enon, beta):
-
+    """Calculte Tg as a function of native energy"""
     #P_Enat_Enon, xedges, yedges = np.histogram2d(Enat, Enon, bins=(nbins_Enat, nbins_Enon), normed=True)
 
     # We mask bins with very low counts to prevent them from influencing the entropy later.
