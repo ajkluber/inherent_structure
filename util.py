@@ -1,4 +1,11 @@
+import os
+import glob
 import numpy as np
+
+def get_T_used():
+    with open("Qtanh_0_05_profile/T_used.dat", "r") as fin:
+        Tf = float(fin.read())
+    return Tf
 
 def get_frame_idxs():
     Tf = get_T_used()
@@ -6,25 +13,102 @@ def get_frame_idxs():
     frame_idxs = np.concatenate([ np.loadtxt(x + "/inherent_structures/frames_fin.dat", dtype=int) for x in temp_dirs ])
     return frame_idxs
 
+def get_load_func(filename):
+    if filename.endswith("npy"):
+        load_func = np.load
+    elif filename.endswith("dat"):
+        load_func = np.loadtxt
+    else:
+        raise IOError("Enrecognized filetype: {}".format(filename))
+    return load_func
+
+def get_energies(filenames, use_rank=True):
+    """Get any energies that exist from subdirectories
+    
+    Parameters
+    ----------
+    filenames : list
+        List of filenames.
+    use_rank : bool, opt.
+        Use energy in rank_* subdirectories
+    """
+
+    Tf = get_T_used()
+    temp_dirs = [ "T_{:.2f}_{}".format(Tf,x) for x in [1,2,3] ]
+    cwd = os.getcwd()
+    E = [ [] for x in range(len(filenames)) ]
+    for i in range(len(temp_dirs)):
+        os.chdir(temp_dirs[i] + "/inherent_structures")
+        if use_rank: 
+            # get energies in rank subdirectory
+            size = len(glob.glob("rank_*"))
+            for j in range(len(filenames)):
+                load_func = get_load_func(filenames[j])
+                E_temp = np.concatenate([ load_func("rank_{}/{}".format(x, filenames[j])) for x in range(size) ])
+                E[j].append(E_temp)
+        else:
+            # get energy in parent directory
+            for j in range(len(filenames)):
+                load_func = get_load_func(filenames[j])
+                E_temp = load_func(filenames[j])
+                E[j].append(E_temp)
+
+        os.chdir(cwd)
+    Ecat = [ np.concatenate(E[i]) for i in range(len(filenames)) ]
+    return Ecat
+
 def get_total_energy():
     Tf = get_T_used()
     temp_dirs = [ "T_{:.2f}_{}".format(Tf,x) for x in [1,2,3] ]
-    Etot = np.concatenate([ np.load(x + "/inherent_structures/Etot.npy") for x in temp_dirs ])
+    cwd = os.getcwd()
+    Etot = []
+    for i in range(len(temp_dirs)):
+        os.chdir(temp_dirs[i] + "/inherent_structures")
+        size = len(glob.glob("rank_*/Etot.dat"))
+        Etot_temp = np.concatenate([ np.loadtxt("rank_{}/Etot.dat".format(x)) for x in range(size) ])
+        Etot.append(Etot_temp)
+        os.chdir(cwd)
+    Etot = np.concatenate(Etot)
+    #Etot = np.concatenate([ np.load(x + "/inherent_structures/Etot.npy") for x in temp_dirs ])
     return Etot
 
 def get_backbone_energy():
     Tf = get_T_used()
     temp_dirs = [ "T_{:.2f}_{}".format(Tf,x) for x in [1,2,3] ]
-    Eback = np.concatenate([ np.load(x + "/inherent_structures/Ebackbone.npy") for x in temp_dirs ])
+    cwd = os.getcwd()
+    Ebackbone = []
+    for i in range(len(temp_dirs)):
+        os.chdir(temp_dirs[i] + "/inherent_structures")
+        size = len(glob.glob("rank_*/Ebackbone.npy"))
+        Ebackbone_temp = np.concatenate([ np.load("rank_{}/Ebackbone.npy".format(x)) for x in range(size) ])
+        Ebackbone.append(Ebackbone_temp)
+        os.chdir(cwd)
+    Ebackbone = np.concatenate(Ebackbone)
+    #Eback = np.concatenate([ np.load(x + "/inherent_structures/Ebackbone.npy") for x in temp_dirs ])
     return Eback
+
 
 def get_native_nonnative_energies():
     """Get any energies that exist from subdirectories"""
 
     Tf = get_T_used()
     temp_dirs = [ "T_{:.2f}_{}".format(Tf,x) for x in [1,2,3] ]
-    Enat = np.concatenate([ np.load(x + "/inherent_structures/Enat.npy") for x in temp_dirs ])
-    Enon = np.concatenate([ np.load(x + "/inherent_structures/Enon.npy") for x in temp_dirs ])
+    cwd = os.getcwd()
+    Enat = []
+    Enon = []
+    for i in range(len(temp_dirs)):
+        os.chdir(temp_dirs[i] + "/inherent_structures")
+        size = len(glob.glob("rank_*/Enon.npy"))
+        Enat_temp = np.concatenate([ np.load("rank_{}/Enat.npy".format(x)) for x in range(size) ])
+        Enon_temp = np.concatenate([ np.load("rank_{}/Enon.npy".format(x)) for x in range(size) ])
+        Enat.append(Enat_temp)
+        Enon.append(Enon_temp)
+        os.chdir(cwd)
+    Enat = np.concatenate(Enat)
+    Enon = np.concatenate(Enon)
+
+    #Enat = np.concatenate([ np.load(x + "/inherent_structures/Enat.npy") for x in temp_dirs ])
+    #Enon = np.concatenate([ np.load(x + "/inherent_structures/Enon.npy") for x in temp_dirs ])
     return Enat, Enon
 
 def get_thermal_native_nonnative_energies():
@@ -61,9 +145,5 @@ def determine_U_frames(Enat, nbins_Enat):
                     break
 
     U = (Enat > Enat_mid_bin[left_side]) & (Enat <= Enat_mid_bin[right_side])
-    return P_Enat, Enat_mid_bin, U
+    return P_Enat, Enat_mid_bin, U, peak_idx1, peak_idx2
 
-def get_T_used():
-    with open("Qtanh_0_05_profile/T_used.dat", "r") as fin:
-        Tf = float(fin.read())
-    return Tf

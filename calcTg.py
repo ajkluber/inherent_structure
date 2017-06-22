@@ -34,8 +34,8 @@ if __name__ == "__main__":
     Tf = util.get_T_used()
     beta = 1./(Tf*kb)
 
-    Enat, Enon = util.get_native_nonnative_energies()
-    P_Enat, Enat_mid_bin, U = util.determine_U_frames(Enat, nbins_Enat)
+    Enat, Enon = util.get_energies(["Enat.npy", "Enon.npy"])
+    P_Enat, Enat_mid_bin, U, peak_idx1, peak_idx2 = util.determine_U_frames(Enat, nbins_Enat)
 
     N = (Enat < 0.9*np.min(Enat))
     # Peak to peak distance in P_Enat --> stability gap
