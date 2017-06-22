@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import argparse
 import numpy as np
 import subprocess as sb
@@ -108,12 +109,22 @@ def run_minimization(path_to_tables, frame_idxs, traj, max_time, start_time):
         The thermalized trajectory to be minimize.
     """
 
-    # Minimization needs to be done
-    np.savetxt("frame_idxs.dat", frame_idxs, fmt="%d")
-    # Loop over trajectory frames
-    for i in xrange(traj.n_frames):
-        if (time.time() - start_time) >= max_time:
-            break
+    if os.path.exists("frame_idxs.dat") and os.path.exists("frames_fin.dat"):
+        # restart calculation
+        temp_frame_idxs = np.loadtxt("frame_idxs.dat", dtype=int)
+        assert np.allclose(frame_idxs, temp_frame_idxs), "Need to use the same stride and nproc to restart."
+        frame_fin = np.loadtxt("frames_fin.dat", dtype=int)
+        start_idx = len(frame_fin)
+    else:
+        # minimize from the beginning of the chunk
+        start_idx = 0
+        np.savetxt("frame_idxs.dat", frame_idxs, fmt="%d")
+
+    for i in xrange(start_idx, traj.n_frames):
+        dtime = time.time() - start_time
+        if dtime > max_time:
+            print "time limit of {:.2f} min exceeded, exiting".format(max_time/60.)
+            raise SystemExit
         else:
             # perform energy minimization using gromacs
             frm = traj.slice(i)
@@ -127,19 +138,6 @@ def run_minimization(path_to_tables, frame_idxs, traj, max_time, start_time):
             # record frame idx
             with open("frames_fin.dat", "a") as fout:
                 fout.write(str(frame_idxs[i]) + "\n")
-
-def restart(trajfile, topology):
-    """TODO: write restart function"""
-    # In progress
-    frame_idxs = np.loadtxt("frame_idxs.dat", dtype=int)
-    frame_fin = np.loadtxt("frames_fin.dat", dtype=int)
-
-    if len(frame_fin) < len(frame_idxs):
-        # minimize frames that were not finished
-        traj_full = md.load(trajfile, top=topology)
-        traj = traj_full.slice(frame_idxs)
-        # 
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Energy minimization for inherent structure analysis.")
@@ -179,12 +177,12 @@ if __name__ == "__main__":
 
     parser.add_argument("--max_time",
                         default=0.995*8*60*60.,
+                        type=float,
                         help="Maximum runtime in secs.")
 
-    # Performance on one processor is roughly 11-40sec/frame. 
-    # So 1proc can do about 2500 frames over 8hours.
-    # Adjust the number of processors (size) and subsample (stride)
-    # accordingingly
+    # Performance on one processor is roughly 11-40sec/frame. So 1proc can do
+    # about 2500 frames over 8hours. Adjust the number of processors (size)
+    # and subsample (stride) accordingly
 
     start_time = time.time()
     
@@ -209,6 +207,8 @@ if __name__ == "__main__":
         # when running on only one processor
         prep_minimization(path_to_ini, stride, path_to_py=path_to_py)
         os.chdir("inherent_structures")
+        with open("size", "w") as fout:
+            fout.write(str(1))
 
         # run minimization
         frame_idxs = np.arange(0, n_frames, stride)
@@ -219,7 +219,6 @@ if __name__ == "__main__":
         run_minimization(path_to_tables, frame_idxs, traj, max_time, start_time)
         #sb.call("mv all_frames.xtc ../traj.xtc", shell=True)
         #sb.call("cp frames_fin.dat ../frames_fin.dat", shell=True)
-
         os.chdir("../..")
     else:
         # running in parallel
@@ -234,11 +233,13 @@ if __name__ == "__main__":
         comm.Barrier()
 
         os.chdir("inherent_structures")
-
         if rank == 0:
             # distribute trajectory chunks to all processors. This reduces
             # memory usage, because only one chunk is loaded into memory at a
             # time.
+            with open("size", "w") as fout:
+                fout.write(str(size))
+
             chunksize = n_frames/size
             if (n_frames % size) != 0:
                 chunksize += 1
@@ -267,7 +268,7 @@ if __name__ == "__main__":
             os.mkdir("rank_{}".format(rank))
         os.chdir("rank_{}".format(rank))
         run_minimization(path_to_tables, frame_idxs, traj, max_time, start_time)
-        os.chdir("../..")
+        os.chdir("..")
 
 #        # If all trajectories finished then bring them together.
 #        os.chdir("..")
@@ -283,4 +284,4 @@ if __name__ == "__main__":
 #            with open("trjcat.log", "w") as fout:
 #                sb.call("trjcat_sbm -f " + cat_trajs + " -o traj.xtc -cat",
 #                    shell=True, stderr=fout, stdout=fout)
-#        os.chdir("..")
+        os.chdir("..")
