@@ -17,7 +17,6 @@ def REM_Entropy(Enn, Ebar, dE, S_0):
     c = S_0 - 0.5*((Ebar/dE)**2)
     return a*Enn*Enn + b*Enn + c
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Calculate landcape parameters from energy distributions.")
     parser.add_argument("--nbins_Enat", default=70, type=int, help="Number of bins along the native energy")
@@ -58,6 +57,8 @@ if __name__ == "__main__":
     a,b,c = popt
     fit_y = parabola(Enon_mid_bin, a, b, c)
 
+    # We are neglecting the vibrational contribution here.   
+
     # calculate landscape parameters from fit parameters
     dEnon = np.sqrt(-0.5/a)
 
@@ -65,7 +66,7 @@ if __name__ == "__main__":
     c_prime = c + beta*dE_stab
 
     Ebar = -b_prime/(2.*a)
-    S0 = c_prime - b*b/(4*a) + 20
+    S0 = c_prime - b*b/(4*a) + 20 
 
     Tg = dEnon/np.sqrt(2.*kb*kb*S0)
 
