@@ -50,23 +50,15 @@ if __name__ == "__main__":
     Elabels = ["Etot", "Eback", "Enat", "Enon"]
     Elabels_thm = ["Etot_thm", "Eback_thm", "Enat_thm", "Enon_thm"]
 
-    print "{:10}{:>10}{:>10}{:>10}".format(" ", "Min", "Max", "shape")
+    print "{:10}{:>10}{:>10}{:>10}{:>15}".format(" ", "Min", "Max", "shape", "min < thm?")
     for i in range(len(E)):
         Estring = "{:<10}".format(Elabels[i]) 
-        Estring += "{:>10}{:>10}{:>10}".format(E[i].min(), E[i].max(), E[i].shape[0]) 
+        Estring += "{:>10.2e}{:>10.2e}{:>10}".format(E[i].min(), E[i].max(), E[i].shape[0]) 
 
-        Estring = "{:<10}".format(Elabels_thm[i]) 
-        Estring += "{:>10}{:>10}{:>10}".format(E_thm[i].min(), E_thm[i].max(), E_thm[i].shape[0]) 
+        Estring += "\n{:<10}".format(Elabels_thm[i]) 
+        Estring += "{:>10.2e}{:>10.2e}{:>10}".format(E_thm[i].min(), E_thm[i].max(), E_thm[i].shape[0]) 
 
-        Estring += "\n{:<15}{:>10}".format("min < thm?", np.all(Etot[1:] < Etot_thm[1:]))
+        #Estring += "\n{:<15}{:>10}".format("min < thm?", str(np.all(Etot[1:] < Etot_thm[1:])))
+        Estring += "{:>15}".format(str(np.all(Etot[1:] < Etot_thm[1:])))
 
-        print Estring 
-
-#    print "Etot minimized: ", np.all(Etot[1:] < Etot_thm[1:])
-#    print "Enat minimized: ", np.all(Enat[1:] < Enat_thm[1:])
-#    print "Enon minimized: ", np.all(Enon[1:] < Enon_thm[1:])
-#    print "Eback minimized: ", np.all(Eback[1:] < Eback_thm[1:])
-#    print "Etot (min, max): ", "({}, {})".format(Etot.min(), Etot.max())
-#    print "Enat (min, max): ", "({}, {})".format(Enat.min(), Enat.max())
-#    print "Enon (min, max): ", "({}, {})".format(Enon.min(), Enon.max())
-#    print "Eback (min, max): ", "({}, {})".format(Eback.min(), Eback.max())
+        print Estring + "\n"
