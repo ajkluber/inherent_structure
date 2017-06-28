@@ -41,7 +41,8 @@ if __name__ == "__main__":
     Enon = Enon[:min_length]
     Enon_thm = Enon_thm[:min_length]
     
-    keep = (Enon < 1e1) & (Enon_thm < 1e1)
+    # some energies blow up. Have to be removed.
+    keep = (Enon < 1e1) & (Enon_thm < 1e1) 
     Enat = Enat[keep]
     Enon = Enon[keep]
 
@@ -57,30 +58,20 @@ if __name__ == "__main__":
     P_N = np.sum(N)/float(len(U))
     P_Enon_U, Enon_bins = np.histogram(Enon[U], bins=nbins_Enon, density=True)
     Enon_mid_bin = 0.5*(Enon_bins[1:] + Enon_bins[:-1])
-    #nonzero = (P_Enon_U > 0)
     nonzero = P_Enon_U > 10.*P_Enon_U.min()
-    #P_Enon_U_ma = np.ma.array(P_Enon_U, mask=(P_Enon_U < 10))
-    #S_Enon_U = np.ma.log(P_Enon_U_ma/P_U) + beta*Enon_mid_bin
-    #S_Enon_U = np.ma.log(P_Enon_U[nonzero]/P_U) + beta*Enon_mid_bin[nonzero]
 
     # Non-native energy distribution is parabolic according to REM 
     P_ratio = P_Enon_U*P_U/P_N
     x_data = Enon_mid_bin[nonzero]
     y_data = np.log(P_ratio[nonzero])
 
-    # with weights. NOT WORKING
-    #w = np.log(P_Enon_U[nonzero])
-    #w /= np.sum(w)
-    #x_data = w*Enon_mid_bin[nonzero]
-    #y_data = w*np.log(P_ratio[nonzero])
-
+    # find optimal parameters and uncertainty 
     parabola = lambda Enn, a, b, c: a*Enn*Enn + b*Enn + c
     popt, pcov = scipy.optimize.curve_fit(parabola, x_data, y_data , p0=(-1, 5, 1))
-    a,b,c = popt    # optimal parameters
-    perr = np.sqrt(np.diag(pcov))   # uncertainty in parameters
+    a, b, c = popt
+    a_std, b_std, c_std = np.sqrt(np.diag(pcov))
     y_fit = parabola(Enon_mid_bin, a, b, c)
 
-    # We are neglecting the vibrational contribution here. FOR FUTURE WORK
     # calculate landscape parameters from fit parameters
     dEnon = np.sqrt(-0.5/a)
 
@@ -88,7 +79,10 @@ if __name__ == "__main__":
     c_prime = c + beta*dE_stab
 
     Ebar = -b_prime/(2.*a)
-    S0 = c_prime - b*b/(4*a) + 20 # ambiguous
+
+    # there is a shift from the vibrational contribution
+    # which is currently unknown.
+    S0 = c_prime - b*b/(4*a) + 60
 
     Tg = dEnon/np.sqrt(2.*kb*kb*S0)
 
@@ -96,28 +90,28 @@ if __name__ == "__main__":
 
     print "Tf = {:5.2f}  Tg = {:5.2f}".format(Tf, Tg)
 
-    plt.plot(Enon_mid_bin[nonzero], np.log(P_ratio[nonzero]))
-    plt.plot(Enon_mid_bin[nonzero], y_fit[nonzero], 'k--')
-    plt.xlabel(r"$E_{non}$")
-    plt.ylabel(r"$\ln P(E_{non})$")
-    plt.show()
+    #plt.plot(Enon_mid_bin[nonzero], np.log(P_ratio[nonzero]))
+    #plt.plot(Enon_mid_bin[nonzero], y_fit[nonzero], 'k--')
+    #plt.xlabel(r"$E_{non}$")
+    #plt.ylabel(r"$\ln P(E_{non})$")
+    #plt.show()
 
-#    if not os.path.exists("Tg_calc"):
-#        os.mkdir("Tg_calc")
-#    os.chdir("Tg_calc")
-#    np.save("Enon_mid_bin.npy", Enon_mid_bin)
-#    np.save("P_Enon_U.npy", P_Enon_U)
-#    np.save("S_REM_Enon.npy", S_REM)
-#
-#    with open("REM_parameters.dat", "w") as fout:
-#        fout.write("{:.2f} {:.2f} {:.2f} {:.2f}".format(beta*dE_stab, beta*dEnon, beta*Ebar, S0))
-#    with open("Tg_Enonnative.dat", "w") as fout:
-#        fout.write("{:.2f}".format(Tg))
-#    with open("Tf.dat", "w") as fout:
-#        fout.write("{:.2f}".format(Tf))
-#    os.chdir("..")
-#
-#
+    if not os.path.exists("Tg_calc"):
+        os.mkdir("Tg_calc")
+    os.chdir("Tg_calc")
+    np.save("Enon_mid_bin.npy", Enon_mid_bin)
+    np.save("P_Enon_U.npy", P_Enon_U)
+    np.save("S_REM_Enon.npy", S_REM)
+
+    with open("REM_parameters.dat", "w") as fout:
+        fout.write("{:.2f} {:.2f} {:.2f} {:.2f}".format(beta*dE_stab, beta*dEnon, beta*Ebar, S0))
+    with open("Tg_Enonnative.dat", "w") as fout:
+        fout.write("{:.2f}".format(Tg))
+    with open("Tf.dat", "w") as fout:
+        fout.write("{:.2f}".format(Tf))
+    os.chdir("..")
+
+
 #    plt.figure()
 #    #plt.plot(Enon_mid_bin, S_REM, 'k--')
 #    plt.plot(Enon_mid_bin[nonzero], np.log(P_Enon_U[nonzero]), label="data")
