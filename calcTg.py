@@ -28,27 +28,28 @@ if __name__ == "__main__":
     nbins_Enon = args.nbins_Enon
     threshold = args.threshold
 
-    #nbins_Enat = 70
-    #nbins_Enon = 20
-    
     Tf = util.get_T_used()
     beta = 1./(Tf*kb)
 
-    Enat, Enon = util.get_data(["Enat.npy", "Enon.npy"])
-    Enat_thm, Enon_thm = util.get_data(["Enat_thm.npy", "Enon_thm.npy"])
+    Enat, Enon, Eback = util.get_data(["Enat.npy", "Enon.npy", "Ebackbone.npy"])
+    Enat_thm, Enon_thm, Eback_thm = util.get_data(["Enat_thm.npy", "Enon_thm.npy", "Ebackbone_thm.npy"])
     min_length = min([Enat.shape[0], Enat_thm.shape[0]])
     Enat = Enat[:min_length]
     Enon = Enon[:min_length]
+    Eback = Eback[:min_length]
     Enon_thm = Enon_thm[:min_length]
     
     # some energies blow up. Have to be removed.
     keep = (Enon < 1e1) & (Enon_thm < 1e1) 
     Enat = Enat[keep]
     Enon = Enon[keep]
+    Eback = Eback[keep]
 
-    P_Enat, Enat_mid_bin, U, peak_idx1, peak_idx2, left_side, right_side = util.determine_U_frames(Enat, nbins_Enat, threshold=threshold)
+    Enat_tot = Enat + Eback
 
-    N = (Enat < 0.9*np.min(Enat))
+    P_Enat, Enat_mid_bin, U, peak_idx1, peak_idx2, left_side, right_side = util.determine_U_frames(Enat_tot, nbins_Enat, threshold=threshold)
+
+    N = (Enat_tot < 0.9*np.min(Enat_tot))
     # Peak to peak distance in P_Enat --> stability gap
     dE_stab = (Enat_mid_bin[peak_idx2] + np.mean(Enon[U])) - (Enat_mid_bin[peak_idx1] + np.mean(Enon[N]))
 
