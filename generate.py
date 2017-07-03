@@ -107,14 +107,18 @@ def run_minimization(path_to_tables, frame_idxs, traj, max_time, start_time):
         Indices of frames that will be minimized.
     traj : obj. mdtraj.Trajectory
         The thermalized trajectory to be minimize.
+    max_time : float
+        The maximum runtime. Will terminate if runtime exceeds this max.
+    start_time : float
+        The starting time in seconds. Used to calculate runtime.
     """
 
     if os.path.exists("frame_idxs.dat") and os.path.exists("frames_fin.dat"):
         # restart calculation
         temp_frame_idxs = np.loadtxt("frame_idxs.dat", dtype=int)
         assert np.allclose(frame_idxs, temp_frame_idxs), "Need to use the same stride and nproc to restart."
-        frame_fin = np.loadtxt("frames_fin.dat", dtype=int)
-        start_idx = len(frame_fin)
+        frames_fin = np.loadtxt("frames_fin.dat", dtype=int)
+        start_idx = len(frames_fin)
     else:
         # minimize from the beginning of the chunk
         start_idx = 0
@@ -270,14 +274,16 @@ if __name__ == "__main__":
         run_minimization(path_to_tables, frame_idxs, traj, max_time, start_time)
         os.chdir("..")
 
+#        # * Easier to leave them as separate trajectories for restarting
+#        # * calculation and further analysis.
+#
 #        # If all trajectories finished then bring them together.
-#        os.chdir("..")
 #        comm.Barrier()
 #
 #        if rank == 0:
-#            frame_fin = np.concatenate([ np.loadtxt("rank_" + str(x) + "/frames_fin.dat", dtype=int) for x in range(size) ])
+#            frames_fin = np.concatenate([ np.loadtxt("rank_" + str(x) + "/frames_fin.dat", dtype=int) for x in range(size) ])
 #            Etot = np.concatenate([ np.loadtxt("rank_" + str(x) + "/Etot.dat") for x in range(size) ])
-#            np.savetxt("frames_fin.dat", frame_fin, fmt="%5d")
+#            np.savetxt("frames_fin.dat", frames_fin, fmt="%5d")
 #            np.save("Etot.npy", Etot)
 #
 #            cat_trajs = " ".join([ "rank_" + str(x) + "/all_frames.xtc" for x in range(size) ])
