@@ -41,6 +41,7 @@ def get_data(filenames, use_rank=True):
         os.chdir(temp_dirs[i] + "/inherent_structures")
         for j in range(len(filenames)):
             ranks_exist = len(glob.glob("rank_*/{}".format(filenames[j]))) > 0
+            files_exist_here = np.all([ os.path.exists(x) for x in filenames]) 
             if use_rank and ranks_exist: 
                 # get data from rank subdirectory
                 size = len(glob.glob("rank_*"))
@@ -49,23 +50,29 @@ def get_data(filenames, use_rank=True):
                 E[j].append(E_temp)
             else:
                 # get data from parent directory
-                for j in range(len(filenames)):
-                    load_func = get_load_func(filenames[j])
-                    E_temp = load_func(filenames[j])
-                    E[j].append(E_temp)
+                if files_exist_here:
+                    for j in range(len(filenames)):
+                        load_func = get_load_func(filenames[j])
+                        E_temp = load_func(filenames[j])
+                        E[j].append(E_temp)
 
         os.chdir(cwd)
-    Ecat = [ np.concatenate(E[i]) for i in range(len(filenames)) ]
+    if ranks_exist or files_exist_here:
+        Ecat = [ np.concatenate(E[i]) for i in range(len(filenames)) ]
+    else:
+        Ecat = list(E)
     return Ecat
 
 def determine_U_frames(Enat, nbins_Enat, threshold=0.5):
 
-    P_Enat, Enat_bins = np.histogram(Enat, bins=nbins_Enat)
+    P_Enat, Enat_bins = np.histogram(Enat, bins=nbins_Enat, density=True)
     Enat_mid_bin = 0.5*(Enat_bins[1:] + Enat_bins[:-1])
 
+    mid_Enat = Enat_mid_bin[len(Enat_mid_bin)/2] 
+
     # max P_Enat above and below median
-    peak_idx1 = np.argwhere(P_Enat == np.max(P_Enat[Enat_mid_bin < np.median(Enat_mid_bin)]))[0][0]
-    peak_idx2 = np.argwhere(P_Enat == np.max(P_Enat[Enat_mid_bin >= np.median(Enat_mid_bin)]))[0][0]
+    peak_idx1 = np.argwhere(P_Enat == np.max(P_Enat[Enat_mid_bin < mid_Enat]))[0][0]
+    peak_idx2 = np.argwhere(P_Enat == np.max(P_Enat[Enat_mid_bin >= mid_Enat]))[0][0]
 
     # U = an interval around the unfolded state peak in P_Enat
     # Determine the width of the non-native interaction basin -> roughness
@@ -75,7 +82,7 @@ def determine_U_frames(Enat, nbins_Enat, threshold=0.5):
         # Unfolded state is the higher energy state
         if Enat_mid_bin[i] >= np.median(Enat_mid_bin):
             if left_side is None:
-                if P_Enat[i] >= threshold*P_Enat[peak_idx2]:
+                if P_Enat[i] > threshold*P_Enat[peak_idx2]:
                     left_side = i
             if not (left_side is None) and (i > (left_side + 4)):
                 # find right side only after left side is found
