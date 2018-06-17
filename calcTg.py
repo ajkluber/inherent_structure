@@ -17,30 +17,28 @@ def REM_Entropy(Enn, Ebar, dE, S_0):
     c = S_0 - 0.5*((Ebar/dE)**2)
     return a*Enn*Enn + b*Enn + c
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Calculate landcape parameters from energy distributions.")
-    parser.add_argument("--nbins_Enat", default=70, type=int, help="Number of bins along the native energy")
-    parser.add_argument("--nbins_Enon", default=20, type=int, help="Number of bins along the non-native energy")
-    parser.add_argument("--threshold", default=0.5, type=float, help="Threshold for U state defintion.")
-
-    args = parser.parse_args()
-    nbins_Enat = args.nbins_Enat
-    nbins_Enon = args.nbins_Enon
-    threshold = args.threshold
+def calculate_REM(nbins_Enat, nbins_Enon, threshold, save_data=True):
+    """Calculate Random Energy Model parameters from inherent structure
+    energies"""
 
     Tf = util.get_T_used()
     beta = 1./(Tf*kb)
 
     Enat, Enon, Eback = util.get_data(["Enat.npy", "Enon.npy", "Ebackbone.npy"])
     Enat_thm, Enon_thm, Eback_thm = util.get_data(["Enat_thm.npy", "Enon_thm.npy", "Ebackbone_thm.npy"])
-    min_length = min([Enat.shape[0], Enat_thm.shape[0]])
-    Enat = Enat[:min_length]
-    Enon = Enon[:min_length]
-    Eback = Eback[:min_length]
-    Enon_thm = Enon_thm[:min_length]
+
+    if Enat_thm == []:
+        keep = (Enon < 1e1)
+    else:
+        min_length = min([Enat.shape[0], Enat_thm.shape[0]])
+        Enat = Enat[:min_length]
+        Enon = Enon[:min_length]
+        Eback = Eback[:min_length]
+        Enon_thm = Enon_thm[:min_length]
     
-    # some energies blow up. Have to be removed.
-    keep = (Enon < 1e1) & (Enon_thm < 1e1) 
+        # some energies blow up. Have to be removed.
+        keep = (Enon < 1e1) & (Enon_thm < 1e1) 
+
     Enat = Enat[keep]
     Enon = Enon[keep]
     Eback = Eback[keep]
@@ -97,21 +95,39 @@ if __name__ == "__main__":
     #plt.ylabel(r"$\ln P(E_{non})$")
     #plt.show()
 
-    if not os.path.exists("Tg_calc"):
-        os.mkdir("Tg_calc")
-    os.chdir("Tg_calc")
-    np.save("Enon_mid_bin.npy", Enon_mid_bin)
-    np.save("P_Enon_U.npy", P_Enon_U)
-    np.save("S_REM_Enon.npy", S_REM)
+    if save_data:
+        if not os.path.exists("Tg_calc"):
+            os.mkdir("Tg_calc")
+        os.chdir("Tg_calc")
+        np.save("Enon_mid_bin.npy", Enon_mid_bin)
+        np.save("P_Enon_U.npy", P_Enon_U)
+        np.save("S_REM_Enon.npy", S_REM)
 
-    with open("REM_parameters.dat", "w") as fout:
-        fout.write("{:.2f} {:.2f} {:.2f} {:.2f}".format(beta*dE_stab, beta*dEnon, beta*Ebar, S0))
-    with open("Tg_Enonnative.dat", "w") as fout:
-        fout.write("{:.2f}".format(Tg))
-    with open("Tf.dat", "w") as fout:
-        fout.write("{:.2f}".format(Tf))
-    os.chdir("..")
+        with open("REM_parameters.dat", "w") as fout:
+            fout.write("{:.2f} {:.2f} {:.2f} {:.2f}".format(beta*dE_stab, beta*dEnon, beta*Ebar, S0))
+        with open("Tg_Enonnative.dat", "w") as fout:
+            fout.write("{:.2f}".format(Tg))
+        with open("Tf.dat", "w") as fout:
+            fout.write("{:.2f}".format(Tf))
+        os.chdir("..")
 
+    return (Enat, Enon, Eback), (Enat_thm, Enon_thm, Eback_thm), Enat_mid_bin, P_Enat, left_side, right_side, peak_idx1, peak_idx2, x_data, y_data, Enon_mid_bin, y_fit, nonzero
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Calculate landcape parameters from energy distributions.")
+    parser.add_argument("--nbins_Enat", default=70, type=int, help="Number of bins along the native energy")
+    parser.add_argument("--nbins_Enon", default=20, type=int, help="Number of bins along the non-native energy")
+    parser.add_argument("--threshold", default=0.5, type=float, help="Threshold for U state defintion.")
+
+    args = parser.parse_args()
+    nbins_Enat = args.nbins_Enat
+    nbins_Enon = args.nbins_Enon
+    threshold = args.threshold
+
+    E, E_thm, Enat_mid_bin, P_Enat, left_side, right_side, peak_idx1, peak_idx2, x_data, y_data, Enon_mid_bin, y_fit, nonzero = calculate_REM(nbins_Enat, nbins_Enon, threshold)
+    Enat, Enon, Eback = E
+    Enat_thm, Enon_thm, Eback_thm = E_thm
 
 #    plt.figure()
 #    #plt.plot(Enon_mid_bin, S_REM, 'k--')

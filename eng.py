@@ -55,9 +55,10 @@ if __name__ == "__main__":
             for j in range(len(rank_trajs)):
                 os.chdir(os.path.dirname(rank_trajs[j]))
 
-                # thermalized energy 
-                idxs = np.loadtxt("frames_fin.dat", dtype=int)
-                calculate_energy(model, "../../" + trajfile, "../" + topfile, idxs=idxs, suffix="_thm", savedir="")
+                if os.path.exists("frames_fin.dat"):
+                    # thermalized energy 
+                    idxs = np.loadtxt("frames_fin.dat", dtype=int)
+                    calculate_energy(model, "../../" + trajfile, "../" + topfile, idxs=idxs, suffix="_thm", savedir="")
 
                 # minimized energy 
                 min_trajfile = os.path.basename(rank_trajs[j])
@@ -65,9 +66,10 @@ if __name__ == "__main__":
 
                 os.chdir("..")
         elif os.path.exists(trajfile):
-            # thermalized energy 
-            idxs = np.loadtxt("frames_fin.dat", dtype=int)
-            calculate_energy(model, "../" + trajfile, topfile, idxs=idxs, suffix="_thm", savedir="")
+            if os.path.exists("frames_fin.dat"):
+                # thermalized energy 
+                idxs = np.loadtxt("frames_fin.dat", dtype=int)
+                calculate_energy(model, "../" + trajfile, topfile, idxs=idxs, suffix="_thm", savedir="")
 
             # minimized energy 
             calculate_energy(model, trajfile, topfile)
