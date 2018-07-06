@@ -291,3 +291,7 @@ if __name__ == "__main__":
 #                sb.call("trjcat_sbm -f " + cat_trajs + " -o traj.xtc -cat",
 #                    shell=True, stderr=fout, stdout=fout)
         os.chdir("..")
+
+    end_time = time.time()
+    run_min = (end_time - start_time)/60.
+    print "Run took: {} min".format(run_min)
